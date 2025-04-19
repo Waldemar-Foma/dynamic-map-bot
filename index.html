@@ -2,142 +2,101 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Построение маршрута</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+  <title>Маршрут</title>
+  <!-- Подключаем Яндекс.Карты API, вставьте ваш ключ API в 'ВАШ_API_КЛЮЧ' -->
+  <script type="text/javascript" src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=8a28db6a-ce07-4e4b-b7a7-ef618bfe03ae" ></script> 
   <style>
-    html, body {
+    html, body, #map {
+      height: 100%;
       margin: 0;
       padding: 0;
-      height: 100%;
-      font-family: "Segoe UI", sans-serif;
-      background-color: #f9f9f9;
     }
-
-    #map {
-      position: absolute;
-      top: 0;
-      bottom: 30%;
-      width: 100%;
-    }
-
     .info-box {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      height: 30%;
-      background: #ffffff;
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
-      padding: 16px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      font-size: 14px;
+      max-height: 30%;
       overflow-y: auto;
-      transition: height 0.3s ease-in-out;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
     }
-
-    .info-box h2 {
-      margin-top: 0;
-      font-size: 16px;
-      color: #222;
-    }
-
-    .info-box p {
-      margin: 6px 0;
-      color: #555;
-    }
-
-    @media (max-width: 768px) {
-      #map {
-        bottom: 35%;
-      }
-
-      .info-box {
-        height: 35%;
-        font-size: 14px;
-        padding: 12px;
-      }
-
-      .info-box h2 {
-        font-size: 15px;
-      }
+    .info-box input[type="button"] {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div id="map"></div>
 
-  <div class="info-box">
-    <h2>Информация о маршруте</h2>
-    <p id="start">Старт: не выбрано</p>
-    <p id="end">Финиш: не выбрано</p>
-    <p id="distance">Расстояние: -</p>
-    <p id="duration">Время в пути: -</p>
+  <div id="map"></div>
+  <div class="info-box" id="infoBox">
+    <b>Информация о поездке:</b>
+    <div id="info">
+      <p><strong>Водитель:</strong> <span id="driverName">Не выбран</span></p>
+      <p><strong>Пассажир:</strong> <span id="passengerName">Не выбран</span></p>
+      <p><strong>Расстояние:</strong> <span id="distance">Не рассчитано</span></p>
+    </div>
+    <input type="button" value="Рассчитать расстояние" onclick="calculateDistance()">
   </div>
 
   <script>
-    ymaps.ready(function () {
-      const map = new ymaps.Map("map", {
-        center: [54.7104, 20.4522], // Калининградская область
-        zoom: 9,
-        controls: ['zoomControl']
+    var driverMarker = null;
+    var passengerMarker = null;
+    var map, driverPlacemark, passengerPlacemark;
+
+    // Функция для расчета расстояния между двумя точками
+    function calculateDistance() {
+      if (driverPlacemark && passengerPlacemark) {
+        var distance = driverPlacemark.geometry.getDistance(passengerPlacemark.geometry); // Расстояние в метрах
+        document.getElementById("distance").textContent = (distance / 1000).toFixed(2) + " км";
+      } else {
+        alert("Пожалуйста, выберите точки водителя и пассажира!");
+      }
+    }
+
+    // Инициализация карты
+    ymaps.ready(init);
+
+    function init() {
+      map = new ymaps.Map("map", {
+        center: [54.7, 21.0], // Центрируем на Калининградскую область
+        zoom: 10
       });
 
-      let startPoint = null;
-      let endPoint = null;
-      let route = null;
-
+      // Обработчик кликов на карте
       map.events.add('click', function (e) {
-        const coords = e.get('coords');
+        var coords = e.get('coords'); // Получаем координаты клика
 
-        if (!startPoint) {
-          startPoint = coords;
-          map.geoObjects.add(new ymaps.Placemark(startPoint, {
-            balloonContent: 'Точка старта'
-          }, {
-            preset: 'islands#blueIcon'
-          }));
-          document.getElementById('start').innerText = `Старт: ${coords.map(c => c.toFixed(5)).join(', ')}`;
-        } else if (!endPoint) {
-          endPoint = coords;
-          map.geoObjects.add(new ymaps.Placemark(endPoint, {
-            balloonContent: 'Точка финиша'
+        // Если маркера для водителя нет, ставим его
+        if (!driverMarker) {
+          driverMarker = new ymaps.Placemark(coords, {
+            balloonContent: "Старт водителя"
           }, {
             preset: 'islands#greenIcon'
-          }));
-          document.getElementById('end').innerText = `Финиш: ${coords.map(c => c.toFixed(5)).join(', ')}`;
-
-          // Строим маршрут
-          ymaps.route([startPoint, endPoint]).then(function (r) {
-            route = r;
-            route.getPaths().options.set({
-              strokeColor: "#ff6600",
-              strokeWidth: 5,
-              opacity: 0.9
-            });
-            map.geoObjects.add(route);
-
-            const distance = route.getLength() / 1000; // км
-            const duration = route.getTime() / 60000; // минут
-
-            document.getElementById('distance').innerText = `Расстояние: ${distance.toFixed(1)} км`;
-            document.getElementById('duration').innerText = `Время в пути: ~${Math.round(duration)} мин`;
-
-            map.setBounds(route.getBounds(), { checkZoomRange: true });
           });
-        } else {
-          // Сбросить всё, начать заново
-          map.geoObjects.removeAll();
-          startPoint = null;
-          endPoint = null;
-          route = null;
-          document.getElementById('start').innerText = 'Старт: не выбрано';
-          document.getElementById('end').innerText = 'Финиш: не выбрано';
-          document.getElementById('distance').innerText = 'Расстояние: -';
-          document.getElementById('duration').innerText = 'Время в пути: -';
+          map.geoObjects.add(driverMarker);
+          document.getElementById("driverName").textContent = "Водитель (Lat: " + coords[0].toFixed(4) + ", Lng: " + coords[1].toFixed(4) + ")";
+          driverPlacemark = driverMarker; // Сохраняем ссылку на маркер водителя
+        }
+        // Если маркера для пассажира нет, ставим его
+        else if (!passengerMarker) {
+          passengerMarker = new ymaps.Placemark(coords, {
+            balloonContent: "Старт пассажира"
+          }, {
+            preset: 'islands#blueIcon'
+          });
+          map.geoObjects.add(passengerMarker);
+          document.getElementById("passengerName").textContent = "Пассажир (Lat: " + coords[0].toFixed(4) + ", Lng: " + coords[1].toFixed(4) + ")";
+          passengerPlacemark = passengerMarker; // Сохраняем ссылку на маркер пассажира
         }
       });
-    });
+    }
   </script>
+
 </body>
 </html>
