@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Народное такси</title>
+  <title>Народное Такси</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link
     rel="stylesheet"
@@ -35,7 +35,7 @@
     <b>Информация о поездке:</b>
     <div id="info"></div>
   </div>
-  
+
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-o9N1j8MkfLTrb3ihHO12rA+UqfLnI0m5u8efyYkE4eE="
@@ -72,9 +72,9 @@
       phone: getParam("pp") || "-"
     };
 
-    // Изменение центра карты на Калининград
-   const map = L.map('map').setView([54.7, 21.0], 10);
-    
+    // Центрируем карту на Калининградскую область
+    const map = L.map('map').setView([54.7, 21.0], 10);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -88,6 +88,7 @@
       const driverLine = L.polyline([driverStart, driverEnd], { color: 'blue' }).addTo(map);
       map.fitBounds(driverLine.getBounds());
     }
+
     if (passengerStart && passengerEnd) {
       L.polyline([passengerStart, passengerEnd], { color: 'green' }).addTo(map);
     }
