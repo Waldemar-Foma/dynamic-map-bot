@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Выбор точки на карте</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -51,82 +49,86 @@
 
     <script>
         // Инициализация карты с центром в Калининграде
-        var map = L.map('map').setView([54.7104, 20.4522], 13); // Координаты Калининграда
+        ymaps.ready(function() {
+            var map = new ymaps.Map('map', {
+                center: [54.7104, 20.4522], // Координаты Калининграда
+                zoom: 13
+            });
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+            var selectedLocation = null;  // Переменная для хранения выбранной точки
+            var sendToBotBtn = document.getElementById('sendToBotBtn');
+            var infoMessage = document.getElementById('infoMessage');
 
-        var selectedLocation = null;  // Переменная для хранения выбранной точки
-        var sendToBotBtn = document.getElementById('sendToBotBtn');
-        var infoMessage = document.getElementById('infoMessage');
-
-        // Функция для обновления информации и активации кнопки
-        function updateInfo(lat, lng) {
-            selectedLocation = { lat: lat, lng: lng };
-            infoMessage.textContent = `Точка выбрана: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-            sendToBotBtn.disabled = false;
-        }
-
-        // Обработчик для выбора точки на карте
-        map.on('click', function(e) {
-            var lat = e.latlng.lat;
-            var lng = e.latlng.lng;
-
-            // Добавляем маркер на карту
-            L.marker([lat, lng]).addTo(map).bindPopup("Ваша точка").openPopup();
-
-            // Обновляем информацию о выбранной точке
-            updateInfo(lat, lng);
-        });
-
-        // Отправка местоположения через кнопку
-        document.getElementById('sendToBotBtn').addEventListener('click', function() {
-            if (selectedLocation) {
-                $.ajax({
-                    url: 'http://localhost:5000/send_location',  // Здесь должен быть ваш серверный URL
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        latitude: selectedLocation.lat,
-                        longitude: selectedLocation.lng
-                    }),
-                    success: function(response) {
-                        alert("Местоположение отправлено в бота!");
-                        sendToBotBtn.disabled = true;
-                    },
-                    error: function(xhr, status, error) {
-                        alert("Ошибка при отправке местоположения.");
-                    }
-                });
+            // Функция для обновления информации и активации кнопки
+            function updateInfo(lat, lng) {
+                selectedLocation = { lat: lat, lng: lng };
+                infoMessage.textContent = `Точка выбрана: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                sendToBotBtn.disabled = false;
             }
-        });
 
-        // Для отправки местоположения через Telegram
-        document.getElementById('sendLocationBtn').addEventListener('click', function() {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                var latitude = position.coords.latitude;
-                var longitude = position.coords.longitude;
+            // Обработчик для выбора точки на карте
+            map.events.add('click', function(e) {
+                var lat = e.get('coords')[0];
+                var lng = e.get('coords')[1];
 
-                updateInfo(latitude, longitude);
-
-                $.ajax({
-                    url: 'http://localhost:5000/send_location',  // Ваш серверный URL
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        latitude: latitude,
-                        longitude: longitude
-                    }),
-                    success: function(response) {
-                        alert("Местоположение отправлено в бота!");
-                    },
-                    error: function(xhr, status, error) {
-                        alert("Ошибка при отправке местоположения.");
-                    }
+                // Добавляем маркер на карту
+                var placemark = new ymaps.Placemark([lat, lng], {
+                    balloonContent: "Ваша точка"
                 });
-            }, function(error) {
-                alert("Ошибка получения местоположения.");
+                map.geoObjects.add(placemark);
+
+                // Обновляем информацию о выбранной точке
+                updateInfo(lat, lng);
+            });
+
+            // Отправка местоположения через кнопку
+            document.getElementById('sendToBotBtn').addEventListener('click', function() {
+                if (selectedLocation) {
+                    $.ajax({
+                        url: 'http://localhost:5000/send_location',  // Здесь должен быть ваш серверный URL
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            latitude: selectedLocation.lat,
+                            longitude: selectedLocation.lng
+                        }),
+                        success: function(response) {
+                            alert("Местоположение отправлено в бота!");
+                            sendToBotBtn.disabled = true;
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Ошибка при отправке местоположения.");
+                        }
+                    });
+                }
+            });
+
+            // Для отправки местоположения через Telegram
+            document.getElementById('sendLocationBtn').addEventListener('click', function() {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var latitude = position.coords.latitude;
+                    var longitude = position.coords.longitude;
+
+                    updateInfo(latitude, longitude);
+
+                    $.ajax({
+                        url: 'http://localhost:5000/send_location',  // Ваш серверный URL
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            latitude: latitude,
+                            longitude: longitude
+                        }),
+                        success: function(response) {
+                            alert("Местоположение отправлено в бота!");
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Ошибка при отправке местоположения.");
+                        }
+                    });
+                }, function(error) {
+                    alert("Ошибка получения местоположения.");
+                });
             });
         });
     </script>
