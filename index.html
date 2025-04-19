@@ -1,158 +1,135 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Народное такси</title>
-  <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #roleSelect {
-      margin: 10px;
-      font-size: 16px;
-    }
-    .info-box {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 15px;
-      font-size: 14px;
-      max-height: 30%;
-      overflow-y: auto;
-    }
-    .role-box {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.8);
-      padding: 10px;
-      border-radius: 5px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор точки на карте</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 80vh;
+        }
+        .container {
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #ddd;
+        }
+        .button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .button:disabled {
+            background-color: #ccc;
+        }
+        .info {
+            font-size: 16px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-  <div class="role-box">
-    <label for="roleSelect">Выберите роль: </label>
-    <select id="roleSelect">
-      <option value="driver">Водитель</option>
-      <option value="passenger">Пассажир</option>
-    </select>
-  </div>
 
-  <div id="map"></div>
-  <div class="info-box" id="infoBox">
-    <b>Информация о поездке:</b>
-    <div id="info"></div>
-  </div>
+    <div id="map"></div>
 
-  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
-  <script>
-    ymaps.ready(init);
+    <div class="container">
+        <button id="sendLocationBtn" class="button">Поделиться местоположением</button>
+        <div class="info" id="infoMessage">Выберите свою точку на карте, чтобы начать.</div>
+        <button id="sendToBotBtn" class="button" disabled>Отправить в бот</button>
+    </div>
 
-    let map, driverStartMarker, driverEndMarker, passengerStartMarker, passengerEndMarker;
-    let driverRoute, passengerRoute;
+    <script>
+        // Инициализация карты с центром в Калининграде
+        var map = L.map('map').setView([54.7104, 20.4522], 13); // Координаты Калининграда
 
-    function init() {
-      map = new ymaps.Map("map", {
-        center: [54.7, 21.0], // Центрируем на Калининград
-        zoom: 12
-      });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
 
-      // Выбираем начальную роль как "водитель"
-      let currentRole = 'driver';
-      updateMap(currentRole);
+        var selectedLocation = null;  // Переменная для хранения выбранной точки
+        var sendToBotBtn = document.getElementById('sendToBotBtn');
+        var infoMessage = document.getElementById('infoMessage');
 
-      // Слушаем изменение роли
-      document.getElementById('roleSelect').addEventListener('change', function() {
-        currentRole = this.value;
-        updateMap(currentRole);
-      });
-    }
+        // Функция для обновления информации и активации кнопки
+        function updateInfo(lat, lng) {
+            selectedLocation = { lat: lat, lng: lng };
+            infoMessage.textContent = `Точка выбрана: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            sendToBotBtn.disabled = false;
+        }
 
-    function updateMap(role) {
-      // Удаляем старые маркеры и маршруты
-      if (driverStartMarker) driverStartMarker.destroy();
-      if (driverEndMarker) driverEndMarker.destroy();
-      if (passengerStartMarker) passengerStartMarker.destroy();
-      if (passengerEndMarker) passengerEndMarker.destroy();
-      if (driverRoute) driverRoute.destroy();
-      if (passengerRoute) passengerRoute.destroy();
+        // Обработчик для выбора точки на карте
+        map.on('click', function(e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
 
-      // В зависимости от роли выставляем маркеры и маршруты
-      if (role === 'driver') {
-        // Маркеры водителя
-        driverStartMarker = new ymaps.Placemark([54.7, 21.0], {
-          balloonContent: "Старт водителя"
-        }, {
-          iconLayout: 'default#image',
-          iconImageHref: 'https://img.icons8.com/ios/452/car.png', // Иконка машины
-          iconImageSize: [30, 30],
-          iconImageOffset: [-15, -15]
-        });
-        driverEndMarker = new ymaps.Placemark([54.8, 21.1], {
-          balloonContent: "Финиш водителя"
+            // Добавляем маркер на карту
+            L.marker([lat, lng]).addTo(map).bindPopup("Ваша точка").openPopup();
+
+            // Обновляем информацию о выбранной точке
+            updateInfo(lat, lng);
         });
 
-        map.geoObjects.add(driverStartMarker);
-        map.geoObjects.add(driverEndMarker);
-
-        driverRoute = new ymaps.Polyline([
-          [54.7, 21.0],
-          [54.8, 21.1]
-        ], {}, {
-          strokeColor: "#0000FF",
-          strokeWidth: 4,
-          strokeOpacity: 0.7
-        });
-        map.geoObjects.add(driverRoute);
-      } else if (role === 'passenger') {
-        // Маркеры пассажира
-        passengerStartMarker = new ymaps.Placemark([54.7, 21.0], {
-          balloonContent: "Старт пассажира"
-        }, {
-          iconLayout: 'default#image',
-          iconImageHref: 'https://img.icons8.com/ios/452/user.png', // Иконка человека
-          iconImageSize: [30, 30],
-          iconImageOffset: [-15, -15]
-        });
-        passengerEndMarker = new ymaps.Placemark([54.75, 21.05], {
-          balloonContent: "Финиш пассажира"
+        // Отправка местоположения через кнопку
+        document.getElementById('sendToBotBtn').addEventListener('click', function() {
+            if (selectedLocation) {
+                $.ajax({
+                    url: 'http://localhost:5000/send_location',  // Здесь должен быть ваш серверный URL
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        latitude: selectedLocation.lat,
+                        longitude: selectedLocation.lng
+                    }),
+                    success: function(response) {
+                        alert("Местоположение отправлено в бота!");
+                        sendToBotBtn.disabled = true;
+                    },
+                    error: function(xhr, status, error) {
+                        alert("Ошибка при отправке местоположения.");
+                    }
+                });
+            }
         });
 
-        map.geoObjects.add(passengerStartMarker);
-        map.geoObjects.add(passengerEndMarker);
+        // Для отправки местоположения через Telegram
+        document.getElementById('sendLocationBtn').addEventListener('click', function() {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                var latitude = position.coords.latitude;
+                var longitude = position.coords.longitude;
 
-        passengerRoute = new ymaps.Polyline([
-          [54.7, 21.0],
-          [54.75, 21.05]
-        ], {}, {
-          strokeColor: "#00FF00",
-          strokeWidth: 4,
-          strokeOpacity: 0.7
+                updateInfo(latitude, longitude);
+
+                $.ajax({
+                    url: 'http://localhost:5000/send_location',  // Ваш серверный URL
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        latitude: latitude,
+                        longitude: longitude
+                    }),
+                    success: function(response) {
+                        alert("Местоположение отправлено в бота!");
+                    },
+                    error: function(xhr, status, error) {
+                        alert("Ошибка при отправке местоположения.");
+                    }
+                });
+            }, function(error) {
+                alert("Ошибка получения местоположения.");
+            });
         });
-        map.geoObjects.add(passengerRoute);
-      }
+    </script>
 
-      // Отображение информации о поездке
-      const infoBox = document.getElementById("info");
-      if (role === 'driver') {
-        infoBox.innerHTML = `
-          <div><b>Водитель:</b> Иван Иванов (@ivan)<br>
-          Телефон: +7 900 000-00-00<br>
-          Машина: Toyota Corolla, стаж: 5 лет</div>
-        `;
-      } else {
-        infoBox.innerHTML = `
-          <div><b>Пассажир:</b> Алексей Смирнов (@alexey)<br>
-          Телефон: +7 900 111-11-11</div>
-        `;
-      }
-    }
-  </script>
 </body>
 </html>
