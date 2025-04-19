@@ -2,14 +2,28 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Маршрут</title>
+  <title>Маршрут поездки</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
   <style>
-    html, body, #map {
-      width: 100%;
-      height: 100%;
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
       margin: 0;
       padding: 0;
+      height: 100%;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f4f4;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 30%;
+      width: 100%;
+      transition: bottom 0.3s ease-in-out;
     }
 
     .info-box {
@@ -17,22 +31,58 @@
       bottom: 0;
       left: 0;
       right: 0;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 10px;
-      font-size: 14px;
-      border-top: 1px solid #ccc;
-      max-height: 35%;
+      height: 30%;
+      background: #ffffff;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      padding: 16px;
       overflow-y: auto;
-      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+      transition: height 0.3s ease-in-out;
+    }
+
+    .info-box h2 {
+      margin-top: 0;
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .info-box .section {
+      margin-bottom: 12px;
+    }
+
+    .info-box .section strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #666;
+    }
+
+    @media (max-width: 768px) {
+      #map {
+        bottom: 35%;
+      }
+
+      .info-box {
+        height: 35%;
+        font-size: 14px;
+        padding: 12px;
+      }
+
+      .info-box h2 {
+        font-size: 15px;
+      }
     }
   </style>
-  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info-box" id="infoBox">
-    <b>Информация о поездке:</b>
-    <div id="info"></div>
+
+  <div class="info-box">
+    <h2>Информация о поездке</h2>
+    <div class="section" id="driver"></div>
+    <div class="section" id="passenger"></div>
+    <div class="section" id="trip"></div>
   </div>
 
   <script>
@@ -53,80 +103,90 @@
     const passengerStart = parseCoords(getParam("ps"));
     const passengerEnd = parseCoords(getParam("pe"));
 
-    const driverInfo = {
-      name: getParam("dn") || "Водитель",
+    const driver = {
+      name: getParam("dn") || "Неизвестно",
       username: getParam("du") || "@username",
       phone: getParam("dp") || "-",
       car: getParam("dc") || "-",
       experience: getParam("dx") || "-"
     };
 
-    const passengerInfo = {
-      name: getParam("pn") || "Пассажир",
+    const passenger = {
+      name: getParam("pn") || "Неизвестно",
       username: getParam("pu") || "@username",
       phone: getParam("pp") || "-"
     };
 
+    function updateInfo(distance, duration) {
+      document.getElementById("driver").innerHTML = `
+        <strong>Водитель:</strong>
+        ${driver.name} (${driver.username})<br>
+        Телефон: ${driver.phone}<br>
+        Машина: ${driver.car}<br>
+        Стаж: ${driver.experience}
+      `;
+
+      document.getElementById("passenger").innerHTML = `
+        <strong>Пассажир:</strong>
+        ${passenger.name} (${passenger.username})<br>
+        Телефон: ${passenger.phone}
+      `;
+
+      document.getElementById("trip").innerHTML = `
+        <strong>Поездка:</strong>
+        Расстояние: ${distance.toFixed(1)} км<br>
+        Время в пути: ~${Math.round(duration)} мин
+      `;
+    }
+
     ymaps.ready(function () {
       const map = new ymaps.Map("map", {
-        center: driverStart || [55.75, 37.57],
+        center: driverStart || [55.751574, 37.573856],
         zoom: 10,
-        controls: ['zoomControl']
+        controls: ["zoomControl"]
       });
 
-      const points = [];
+      const geoObjects = [];
 
-      if (driverStart && driverEnd) {
-        points.push(driverStart, driverEnd);
+      if (driverStart) {
+        geoObjects.push(new ymaps.Placemark(driverStart, { balloonContent: "Старт водителя" }, { preset: "islands#blueIcon" }));
       }
 
-      if (passengerStart && passengerEnd) {
-        points.push(passengerStart, passengerEnd);
+      if (driverEnd) {
+        geoObjects.push(new ymaps.Placemark(driverEnd, { balloonContent: "Финиш водителя" }, { preset: "islands#blueDotIcon" }));
       }
 
-      // Построение маршрута водителя
+      if (passengerStart) {
+        geoObjects.push(new ymaps.Placemark(passengerStart, { balloonContent: "Старт пассажира" }, { preset: "islands#greenIcon" }));
+      }
+
+      if (passengerEnd) {
+        geoObjects.push(new ymaps.Placemark(passengerEnd, { balloonContent: "Финиш пассажира" }, { preset: "islands#greenDotIcon" }));
+      }
+
+      geoObjects.forEach(obj => map.geoObjects.add(obj));
+
       if (driverStart && driverEnd) {
         ymaps.route([driverStart, driverEnd]).then(function (route) {
           route.getPaths().options.set({
-            strokeColor: "blue",
+            strokeColor: "#1e90ff",
             opacity: 0.8,
-            strokeWidth: 4
+            strokeWidth: 5
           });
           map.geoObjects.add(route);
 
           const distance = route.getLength() / 1000; // км
-          const duration = Math.round(route.getTime() / 60); // мин
+          const duration = route.getTime() / 60000; // минут
 
           updateInfo(distance, duration);
+
+          const bounds = route.getBounds();
+          map.setBounds(bounds, { checkZoomRange: true });
+        }, function (error) {
+          alert("Не удалось построить маршрут: " + error.message);
         });
       }
-
-      // Метки
-      if (driverStart) map.geoObjects.add(new ymaps.Placemark(driverStart, { balloonContent: "Старт водителя" }, { preset: 'islands#blueIcon' }));
-      if (driverEnd) map.geoObjects.add(new ymaps.Placemark(driverEnd, { balloonContent: "Финиш водителя" }, { preset: 'islands#blueDotIcon' }));
-
-      if (passengerStart) map.geoObjects.add(new ymaps.Placemark(passengerStart, { balloonContent: "Старт пассажира" }, { preset: 'islands#greenIcon' }));
-      if (passengerEnd) map.geoObjects.add(new ymaps.Placemark(passengerEnd, { balloonContent: "Финиш пассажира" }, { preset: 'islands#greenDotIcon' }));
-
-      if (points.length > 0) {
-        map.setBounds(ymaps.geoQuery(map.geoObjects).getBounds(), { checkZoomRange: true });
-      }
     });
-
-    function updateInfo(distance, duration) {
-      const infoBox = document.getElementById("info");
-      infoBox.innerHTML = `
-        <div><b>Водитель:</b> ${driverInfo.name} (${driverInfo.username})<br>
-        Телефон: ${driverInfo.phone}<br>
-        Машина: ${driverInfo.car}, стаж: ${driverInfo.experience}</div>
-        <hr>
-        <div><b>Пассажир:</b> ${passengerInfo.name} (${passengerInfo.username})<br>
-        Телефон: ${passengerInfo.phone}</div>
-        <hr>
-        <div><b>Расстояние:</b> ${distance.toFixed(1)} км<br>
-        <b>Время в пути:</b> ~${duration} мин</div>
-      `;
-    }
   </script>
 </body>
 </html>
