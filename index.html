@@ -2,13 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Народное Такси</title>
+  <title>Маршрут</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p3p2xNq+Dr9DTV3ZpJX8iuf6kPZv7zWxgA5r6z3SYXI="
-    crossorigin=""
   />
   <style>
     html, body, #map {
@@ -36,11 +34,7 @@
     <div id="info"></div>
   </div>
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1j8MkfLTrb3ihHO12rA+UqfLnI0m5u8efyYkE4eE="
-    crossorigin=""
-  ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     function getParam(name) {
       const url = new URL(window.location.href);
@@ -49,6 +43,7 @@
     }
 
     function parseCoords(coordStr) {
+      if (!coordStr) return null;
       const [lat, lon] = coordStr.split(',').map(Number);
       return [lat, lon];
     }
@@ -72,8 +67,7 @@
       phone: getParam("pp") || "-"
     };
 
-    // Центрируем карту на Калининградскую область
-    const map = L.map('map').setView([54.7, 21.0], 10);
+    const map = L.map('map').setView([54.7, 21.0], 10); // Калининградская область
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
