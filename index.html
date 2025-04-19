@@ -2,20 +2,16 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Маршрут поездки</title>
+  <title>Построение маршрута</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: #f4f4f4;
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f9f9f9;
     }
 
     #map {
@@ -23,7 +19,6 @@
       top: 0;
       bottom: 30%;
       width: 100%;
-      transition: bottom 0.3s ease-in-out;
     }
 
     .info-box {
@@ -35,7 +30,7 @@
       background: #ffffff;
       border-top-left-radius: 16px;
       border-top-right-radius: 16px;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
       padding: 16px;
       overflow-y: auto;
       transition: height 0.3s ease-in-out;
@@ -44,18 +39,12 @@
     .info-box h2 {
       margin-top: 0;
       font-size: 16px;
-      font-weight: bold;
-      color: #333;
+      color: #222;
     }
 
-    .info-box .section {
-      margin-bottom: 12px;
-    }
-
-    .info-box .section strong {
-      display: block;
-      margin-bottom: 4px;
-      color: #666;
+    .info-box p {
+      margin: 6px 0;
+      color: #555;
     }
 
     @media (max-width: 768px) {
@@ -79,113 +68,75 @@
   <div id="map"></div>
 
   <div class="info-box">
-    <h2>Информация о поездке</h2>
-    <div class="section" id="driver"></div>
-    <div class="section" id="passenger"></div>
-    <div class="section" id="trip"></div>
+    <h2>Информация о маршруте</h2>
+    <p id="start">Старт: не выбрано</p>
+    <p id="end">Финиш: не выбрано</p>
+    <p id="distance">Расстояние: -</p>
+    <p id="duration">Время в пути: -</p>
   </div>
 
   <script>
-    function getParam(name) {
-      const url = new URL(window.location.href);
-      const value = url.searchParams.get(name);
-      return value ? decodeURIComponent(value) : null;
-    }
-
-    function parseCoords(coordStr) {
-      if (!coordStr) return null;
-      const [lat, lon] = coordStr.split(',').map(Number);
-      return [lat, lon];
-    }
-
-    const driverStart = parseCoords(getParam("ds"));
-    const driverEnd = parseCoords(getParam("de"));
-    const passengerStart = parseCoords(getParam("ps"));
-    const passengerEnd = parseCoords(getParam("pe"));
-
-    const driver = {
-      name: getParam("dn") || "Неизвестно",
-      username: getParam("du") || "@username",
-      phone: getParam("dp") || "-",
-      car: getParam("dc") || "-",
-      experience: getParam("dx") || "-"
-    };
-
-    const passenger = {
-      name: getParam("pn") || "Неизвестно",
-      username: getParam("pu") || "@username",
-      phone: getParam("pp") || "-"
-    };
-
-    function updateInfo(distance, duration) {
-      document.getElementById("driver").innerHTML = `
-        <strong>Водитель:</strong>
-        ${driver.name} (${driver.username})<br>
-        Телефон: ${driver.phone}<br>
-        Машина: ${driver.car}<br>
-        Стаж: ${driver.experience}
-      `;
-
-      document.getElementById("passenger").innerHTML = `
-        <strong>Пассажир:</strong>
-        ${passenger.name} (${passenger.username})<br>
-        Телефон: ${passenger.phone}
-      `;
-
-      document.getElementById("trip").innerHTML = `
-        <strong>Поездка:</strong>
-        Расстояние: ${distance.toFixed(1)} км<br>
-        Время в пути: ~${Math.round(duration)} мин
-      `;
-    }
-
     ymaps.ready(function () {
       const map = new ymaps.Map("map", {
-        center: driverStart || [55.751574, 37.573856],
-        zoom: 10,
-        controls: ["zoomControl"]
+        center: [54.7104, 20.4522], // Калининградская область
+        zoom: 9,
+        controls: ['zoomControl']
       });
 
-      const geoObjects = [];
+      let startPoint = null;
+      let endPoint = null;
+      let route = null;
 
-      if (driverStart) {
-        geoObjects.push(new ymaps.Placemark(driverStart, { balloonContent: "Старт водителя" }, { preset: "islands#blueIcon" }));
-      }
+      map.events.add('click', function (e) {
+        const coords = e.get('coords');
 
-      if (driverEnd) {
-        geoObjects.push(new ymaps.Placemark(driverEnd, { balloonContent: "Финиш водителя" }, { preset: "islands#blueDotIcon" }));
-      }
+        if (!startPoint) {
+          startPoint = coords;
+          map.geoObjects.add(new ymaps.Placemark(startPoint, {
+            balloonContent: 'Точка старта'
+          }, {
+            preset: 'islands#blueIcon'
+          }));
+          document.getElementById('start').innerText = `Старт: ${coords.map(c => c.toFixed(5)).join(', ')}`;
+        } else if (!endPoint) {
+          endPoint = coords;
+          map.geoObjects.add(new ymaps.Placemark(endPoint, {
+            balloonContent: 'Точка финиша'
+          }, {
+            preset: 'islands#greenIcon'
+          }));
+          document.getElementById('end').innerText = `Финиш: ${coords.map(c => c.toFixed(5)).join(', ')}`;
 
-      if (passengerStart) {
-        geoObjects.push(new ymaps.Placemark(passengerStart, { balloonContent: "Старт пассажира" }, { preset: "islands#greenIcon" }));
-      }
+          // Строим маршрут
+          ymaps.route([startPoint, endPoint]).then(function (r) {
+            route = r;
+            route.getPaths().options.set({
+              strokeColor: "#ff6600",
+              strokeWidth: 5,
+              opacity: 0.9
+            });
+            map.geoObjects.add(route);
 
-      if (passengerEnd) {
-        geoObjects.push(new ymaps.Placemark(passengerEnd, { balloonContent: "Финиш пассажира" }, { preset: "islands#greenDotIcon" }));
-      }
+            const distance = route.getLength() / 1000; // км
+            const duration = route.getTime() / 60000; // минут
 
-      geoObjects.forEach(obj => map.geoObjects.add(obj));
+            document.getElementById('distance').innerText = `Расстояние: ${distance.toFixed(1)} км`;
+            document.getElementById('duration').innerText = `Время в пути: ~${Math.round(duration)} мин`;
 
-      if (driverStart && driverEnd) {
-        ymaps.route([driverStart, driverEnd]).then(function (route) {
-          route.getPaths().options.set({
-            strokeColor: "#1e90ff",
-            opacity: 0.8,
-            strokeWidth: 5
+            map.setBounds(route.getBounds(), { checkZoomRange: true });
           });
-          map.geoObjects.add(route);
-
-          const distance = route.getLength() / 1000; // км
-          const duration = route.getTime() / 60000; // минут
-
-          updateInfo(distance, duration);
-
-          const bounds = route.getBounds();
-          map.setBounds(bounds, { checkZoomRange: true });
-        }, function (error) {
-          alert("Не удалось построить маршрут: " + error.message);
-        });
-      }
+        } else {
+          // Сбросить всё, начать заново
+          map.geoObjects.removeAll();
+          startPoint = null;
+          endPoint = null;
+          route = null;
+          document.getElementById('start').innerText = 'Старт: не выбрано';
+          document.getElementById('end').innerText = 'Финиш: не выбрано';
+          document.getElementById('distance').innerText = 'Расстояние: -';
+          document.getElementById('duration').innerText = 'Время в пути: -';
+        }
+      });
     });
   </script>
 </body>
