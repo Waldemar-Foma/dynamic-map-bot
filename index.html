@@ -1,71 +1,50 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Выбор конечной точки</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link 
-    rel="stylesheet" 
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-    integrity="sha256-p3p2xNq+Dr9DTV3ZpJX8iuf6kPZv7zWxgA5r6z3SYXI=" 
-    crossorigin=""
-  />
-  <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #confirmBtn {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      background: #4caf50;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 16px;
-      cursor: pointer;
-      z-index: 999;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор точки</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+    <style>
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
 </head>
 <body>
-  <div id="map"></div>
-  <button id="confirmBtn" disabled>Подтвердить точку</button>
+    <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([55.751244, 37.618423], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    <script>
+        ymaps.ready(function () {
+            var map = new ymaps.Map('map', {
+                center: [55.751244, 37.618423], // Начальная позиция карты (Москва)
+                zoom: 10
+            });
 
-    let marker = null;
-    let selectedCoords = null;
+            var placemark;
 
-    map.on('click', function (e) {
-      if (marker) {
-        marker.setLatLng(e.latlng);
-      } else {
-        marker = L.marker(e.latlng).addTo(map);
-      }
-      selectedCoords = e.latlng;
-      document.getElementById("confirmBtn").disabled = false;
-    });
+            // Функция для добавления метки
+            function addPlacemark(e) {
+                if (placemark) {
+                    placemark.geometry.setCoordinates(e.get('coords'));
+                } else {
+                    placemark = new ymaps.Placemark(e.get('coords'), {}, {
+                        preset: 'islands#circleDotIcon',
+                        draggable: true
+                    });
+                    map.geoObjects.add(placemark);
+                }
+            }
 
-    document.getElementById("confirmBtn").addEventListener("click", function () {
-      if (window.Telegram.WebApp) {
-        window.Telegram.WebApp.sendData(`${selectedCoords.lat},${selectedCoords.lng}`);
-        window.Telegram.WebApp.close(); // Закрытие WebApp после выбора
-      } else {
-        alert("WebApp недоступен");
-      }
-    });
-
-    window.Telegram.WebApp.expand(); // Разворачиваем WebApp на весь экран
-  </script>
+            // Слушаем клики по карте
+            map.events.add('click', function (e) {
+                addPlacemark(e);
+                var coords = e.get('coords');
+                // Отправляем координаты метки обратно на сервер через URL
+                window.location.href = "?lat=" + coords[0] + "&lon=" + coords[1];
+            });
+        });
+    </script>
 </body>
 </html>
