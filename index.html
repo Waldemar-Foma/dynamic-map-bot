@@ -2,31 +2,31 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Народное Такси</title>
+  <title>Маршрут</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Подключаем Leaflet без integrity -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
   <style>
     html, body, #map {
+      width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
     }
+
     .info-box {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.95);
       padding: 10px;
       font-size: 14px;
-      max-height: 30%;
+      border-top: 1px solid #ccc;
+      max-height: 35%;
       overflow-y: auto;
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }
   </style>
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -35,8 +35,6 @@
     <div id="info"></div>
   </div>
 
-  <!-- Подключаем Leaflet без integrity -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     function getParam(name) {
       const url = new URL(window.location.href);
@@ -69,36 +67,66 @@
       phone: getParam("pp") || "-"
     };
 
-    const map = L.map('map').setView([54.7, 21.0], 10);
+    ymaps.ready(function () {
+      const map = new ymaps.Map("map", {
+        center: driverStart || [55.75, 37.57],
+        zoom: 10,
+        controls: ['zoomControl']
+      });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+      const points = [];
 
-    // Добавляем маркеры и линии, если координаты заданы
-    if (driverStart) L.marker(driverStart).addTo(map).bindPopup("Старт водителя").openPopup();
-    if (driverEnd) L.marker(driverEnd).addTo(map).bindPopup("Финиш водителя");
-    if (passengerStart) L.marker(passengerStart).addTo(map).bindPopup("Старт пассажира");
-    if (passengerEnd) L.marker(passengerEnd).addTo(map).bindPopup("Финиш пассажира");
+      if (driverStart && driverEnd) {
+        points.push(driverStart, driverEnd);
+      }
 
-    if (driverStart && driverEnd) {
-      const driverLine = L.polyline([driverStart, driverEnd], { color: 'blue' }).addTo(map);
-      map.fitBounds(driverLine.getBounds());
+      if (passengerStart && passengerEnd) {
+        points.push(passengerStart, passengerEnd);
+      }
+
+      // Построение маршрута водителя
+      if (driverStart && driverEnd) {
+        ymaps.route([driverStart, driverEnd]).then(function (route) {
+          route.getPaths().options.set({
+            strokeColor: "blue",
+            opacity: 0.8,
+            strokeWidth: 4
+          });
+          map.geoObjects.add(route);
+
+          const distance = route.getLength() / 1000; // км
+          const duration = Math.round(route.getTime() / 60); // мин
+
+          updateInfo(distance, duration);
+        });
+      }
+
+      // Метки
+      if (driverStart) map.geoObjects.add(new ymaps.Placemark(driverStart, { balloonContent: "Старт водителя" }, { preset: 'islands#blueIcon' }));
+      if (driverEnd) map.geoObjects.add(new ymaps.Placemark(driverEnd, { balloonContent: "Финиш водителя" }, { preset: 'islands#blueDotIcon' }));
+
+      if (passengerStart) map.geoObjects.add(new ymaps.Placemark(passengerStart, { balloonContent: "Старт пассажира" }, { preset: 'islands#greenIcon' }));
+      if (passengerEnd) map.geoObjects.add(new ymaps.Placemark(passengerEnd, { balloonContent: "Финиш пассажира" }, { preset: 'islands#greenDotIcon' }));
+
+      if (points.length > 0) {
+        map.setBounds(ymaps.geoQuery(map.geoObjects).getBounds(), { checkZoomRange: true });
+      }
+    });
+
+    function updateInfo(distance, duration) {
+      const infoBox = document.getElementById("info");
+      infoBox.innerHTML = `
+        <div><b>Водитель:</b> ${driverInfo.name} (${driverInfo.username})<br>
+        Телефон: ${driverInfo.phone}<br>
+        Машина: ${driverInfo.car}, стаж: ${driverInfo.experience}</div>
+        <hr>
+        <div><b>Пассажир:</b> ${passengerInfo.name} (${passengerInfo.username})<br>
+        Телефон: ${passengerInfo.phone}</div>
+        <hr>
+        <div><b>Расстояние:</b> ${distance.toFixed(1)} км<br>
+        <b>Время в пути:</b> ~${duration} мин</div>
+      `;
     }
-
-    if (passengerStart && passengerEnd) {
-      L.polyline([passengerStart, passengerEnd], { color: 'green' }).addTo(map);
-    }
-
-    const infoBox = document.getElementById("info");
-    infoBox.innerHTML = `
-      <div><b>Водитель:</b> ${driverInfo.name} (${driverInfo.username})<br>
-      Телефон: ${driverInfo.phone}<br>
-      Машина: ${driverInfo.car}, стаж: ${driverInfo.experience}</div>
-      <hr>
-      <div><b>Пассажир:</b> ${passengerInfo.name} (${passengerInfo.username})<br>
-      Телефон: ${passengerInfo.phone}</div>
-    `;
   </script>
 </body>
 </html>
