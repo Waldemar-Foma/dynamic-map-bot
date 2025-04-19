@@ -2,12 +2,12 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Маршрут</title>
+  <title>Выбор конечной точки</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p3p2xNq+Dr9DTV3ZpJX8iuf6kPZv7zWxgA5r6z3SYXI="
+  <link 
+    rel="stylesheet" 
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+    integrity="sha256-p3p2xNq+Dr9DTV3ZpJX8iuf6kPZv7zWxgA5r6z3SYXI=" 
     crossorigin=""
   />
   <style>
@@ -16,90 +16,56 @@
       margin: 0;
       padding: 0;
     }
-    .info-box {
+    #confirmBtn {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
-      font-size: 14px;
-      max-height: 30%;
-      overflow-y: auto;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 999;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info-box" id="infoBox">
-    <b>Информация о поездке:</b>
-    <div id="info"></div>
-  </div>
-  
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1j8MkfLTrb3ihHO12rA+UqfLnI0m5u8efyYkE4eE="
-    crossorigin=""
-  ></script>
+  <button id="confirmBtn" disabled>Подтвердить точку</button>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    function getParam(name) {
-      const url = new URL(window.location.href);
-      const value = url.searchParams.get(name);
-      return value ? decodeURIComponent(value) : null;
-    }
-
-    function parseCoords(coordStr) {
-      const [lat, lon] = coordStr.split(',').map(Number);
-      return [lat, lon];
-    }
-
-    const driverStart = parseCoords(getParam("ds"));
-    const driverEnd = parseCoords(getParam("de"));
-    const passengerStart = parseCoords(getParam("ps"));
-    const passengerEnd = parseCoords(getParam("pe"));
-
-    const driverInfo = {
-      name: getParam("dn") || "Водитель",
-      username: getParam("du") || "@username",
-      phone: getParam("dp") || "-",
-      car: getParam("dc") || "-",
-      experience: getParam("dx") || "-"
-    };
-
-    const passengerInfo = {
-      name: getParam("pn") || "Пассажир",
-      username: getParam("pu") || "@username",
-      phone: getParam("pp") || "-"
-    };
-
-    const map = L.map('map').setView(driverStart || [55.751244, 37.618423], 13);
-
+    const map = L.map('map').setView([55.751244, 37.618423], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    if (driverStart) L.marker(driverStart).addTo(map).bindPopup("Старт водителя").openPopup();
-    if (driverEnd) L.marker(driverEnd).addTo(map).bindPopup("Финиш водителя");
-    if (passengerStart) L.marker(passengerStart).addTo(map).bindPopup("Старт пассажира");
-    if (passengerEnd) L.marker(passengerEnd).addTo(map).bindPopup("Финиш пассажира");
+    let marker = null;
+    let selectedCoords = null;
 
-    if (driverStart && driverEnd) {
-      const driverLine = L.polyline([driverStart, driverEnd], { color: 'blue' }).addTo(map);
-      map.fitBounds(driverLine.getBounds());
-    }
-    if (passengerStart && passengerEnd) {
-      L.polyline([passengerStart, passengerEnd], { color: 'green' }).addTo(map);
-    }
+    map.on('click', function (e) {
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng).addTo(map);
+      }
+      selectedCoords = e.latlng;
+      document.getElementById("confirmBtn").disabled = false;
+    });
 
-    const infoBox = document.getElementById("info");
-    infoBox.innerHTML = `
-      <div><b>Водитель:</b> ${driverInfo.name} (${driverInfo.username})<br>
-      Телефон: ${driverInfo.phone}<br>
-      Машина: ${driverInfo.car}, стаж: ${driverInfo.experience}</div>
-      <hr>
-      <div><b>Пассажир:</b> ${passengerInfo.name} (${passengerInfo.username})<br>
-      Телефон: ${passengerInfo.phone}</div>
-    `;
+    document.getElementById("confirmBtn").addEventListener("click", function () {
+      if (window.Telegram.WebApp) {
+        window.Telegram.WebApp.sendData(`${selectedCoords.lat},${selectedCoords.lng}`);
+        window.Telegram.WebApp.close(); // Закрытие WebApp после выбора
+      } else {
+        alert("WebApp недоступен");
+      }
+    });
+
+    window.Telegram.WebApp.expand(); // Разворачиваем WebApp на весь экран
   </script>
 </body>
 </html>
