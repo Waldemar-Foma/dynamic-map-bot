@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Маршрут</title>
-  <script type="text/javascript" src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=8a28db6a-ce07-4e4b-b7a7-ef618bfe03ae" ></script> 
+  <title>Народное такси</title>
   <style>
     html, body, #map {
       height: 100%;
       margin: 0;
       padding: 0;
+    }
+    #roleSelect {
+      margin: 10px;
+      font-size: 16px;
     }
     .info-box {
       position: absolute;
@@ -17,101 +20,139 @@
       left: 0;
       right: 0;
       background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
+      padding: 15px;
       font-size: 14px;
       max-height: 30%;
       overflow-y: auto;
-      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+    }
+    .role-box {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
+  <div class="role-box">
+    <label for="roleSelect">Выберите роль: </label>
+    <select id="roleSelect">
+      <option value="driver">Водитель</option>
+      <option value="passenger">Пассажир</option>
+    </select>
+  </div>
 
   <div id="map"></div>
   <div class="info-box" id="infoBox">
     <b>Информация о поездке:</b>
-    <div id="info">
-      <p><strong>Водитель:</strong> <span id="driverName">Не выбран</span></p>
-      <p><strong>Пассажир:</strong> <span id="passengerName">Не выбран</span></p>
-      <p><strong>Расстояние:</strong> <span id="distance">Не рассчитано</span></p>
-    </div>
+    <div id="info"></div>
   </div>
 
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
   <script>
-    var driverMarker = null;
-    var passengerMarker = null;
-    var map, driverPlacemark, passengerPlacemark;
-
-    // Функция для расчета расстояния между двумя точками
-    function calculateDistance() {
-      if (driverPlacemark && passengerPlacemark) {
-        var distance = driverPlacemark.geometry.getDistance(passengerPlacemark.geometry); // Расстояние в метрах
-        document.getElementById("distance").textContent = (distance / 1000).toFixed(2) + " км";
-      } else {
-        alert("Пожалуйста, выберите точки водителя и пассажира!");
-      }
-    }
-
-    // Инициализация карты
     ymaps.ready(init);
+
+    let map, driverStartMarker, driverEndMarker, passengerStartMarker, passengerEndMarker;
+    let driverRoute, passengerRoute;
 
     function init() {
       map = new ymaps.Map("map", {
-        center: [54.708190, 20.504057], // Центрируем на Калининградскую область
-        zoom: 12 // Устанавливаем более высокий уровень масштаба
+        center: [54.7, 21.0], // Центрируем на Калининград
+        zoom: 12
       });
 
-      // Иконки для водителя и пассажира
-      var driverIcon = new ymaps.Icon({
-        href: "https://img.icons8.com/ios/50/000000/car.png", // Иконка для водителя
-        size: [30, 30],
-        offset: [-15, -15]
-      });
+      // Выбираем начальную роль как "водитель"
+      let currentRole = 'driver';
+      updateMap(currentRole);
 
-      var passengerIcon = new ymaps.Icon({
-        href: "https://img.icons8.com/ios/50/000000/user.png", // Иконка для пассажира
-        size: [30, 30],
-        offset: [-15, -15]
-      });
-
-      // Обработчик кликов на карте
-      map.events.add('click', function (e) {
-        var coords = e.get('coords'); // Получаем координаты клика
-
-        // Проверяем, какой человек выбирает точку
-        if (!driverMarker) {
-          driverMarker = new ymaps.Placemark(coords, {
-            balloonContent: "Старт водителя"
-          }, {
-            iconLayout: 'default#image',
-            iconImageHref: "https://img.icons8.com/ios/50/000000/car.png", // иконка водителя
-            iconImageSize: [30, 30],
-            iconImageOffset: [-15, -15]
-          });
-          map.geoObjects.add(driverMarker);
-          document.getElementById("driverName").textContent = "Водитель (Lat: " + coords[0].toFixed(4) + ", Lng: " + coords[1].toFixed(4) + ")";
-          driverPlacemark = driverMarker; // Сохраняем ссылку на маркер водителя
-        }
-        else if (!passengerMarker) {
-          passengerMarker = new ymaps.Placemark(coords, {
-            balloonContent: "Старт пассажира"
-          }, {
-            iconLayout: 'default#image',
-            iconImageHref: "https://img.icons8.com/ios/50/000000/user.png", // иконка пассажира
-            iconImageSize: [30, 30],
-            iconImageOffset: [-15, -15]
-          });
-          map.geoObjects.add(passengerMarker);
-          document.getElementById("passengerName").textContent = "Пассажир (Lat: " + coords[0].toFixed(4) + ", Lng: " + coords[1].toFixed(4) + ")";
-          passengerPlacemark = passengerMarker; // Сохраняем ссылку на маркер пассажира
-        }
-
-        if (driverPlacemark && passengerPlacemark) {
-          calculateDistance(); // Рассчитываем расстояние после того как оба маркера выбраны
-        }
+      // Слушаем изменение роли
+      document.getElementById('roleSelect').addEventListener('change', function() {
+        currentRole = this.value;
+        updateMap(currentRole);
       });
     }
-  </script>
 
+    function updateMap(role) {
+      // Удаляем старые маркеры и маршруты
+      if (driverStartMarker) driverStartMarker.destroy();
+      if (driverEndMarker) driverEndMarker.destroy();
+      if (passengerStartMarker) passengerStartMarker.destroy();
+      if (passengerEndMarker) passengerEndMarker.destroy();
+      if (driverRoute) driverRoute.destroy();
+      if (passengerRoute) passengerRoute.destroy();
+
+      // В зависимости от роли выставляем маркеры и маршруты
+      if (role === 'driver') {
+        // Маркеры водителя
+        driverStartMarker = new ymaps.Placemark([54.7, 21.0], {
+          balloonContent: "Старт водителя"
+        }, {
+          iconLayout: 'default#image',
+          iconImageHref: 'https://img.icons8.com/ios/452/car.png', // Иконка машины
+          iconImageSize: [30, 30],
+          iconImageOffset: [-15, -15]
+        });
+        driverEndMarker = new ymaps.Placemark([54.8, 21.1], {
+          balloonContent: "Финиш водителя"
+        });
+
+        map.geoObjects.add(driverStartMarker);
+        map.geoObjects.add(driverEndMarker);
+
+        driverRoute = new ymaps.Polyline([
+          [54.7, 21.0],
+          [54.8, 21.1]
+        ], {}, {
+          strokeColor: "#0000FF",
+          strokeWidth: 4,
+          strokeOpacity: 0.7
+        });
+        map.geoObjects.add(driverRoute);
+      } else if (role === 'passenger') {
+        // Маркеры пассажира
+        passengerStartMarker = new ymaps.Placemark([54.7, 21.0], {
+          balloonContent: "Старт пассажира"
+        }, {
+          iconLayout: 'default#image',
+          iconImageHref: 'https://img.icons8.com/ios/452/user.png', // Иконка человека
+          iconImageSize: [30, 30],
+          iconImageOffset: [-15, -15]
+        });
+        passengerEndMarker = new ymaps.Placemark([54.75, 21.05], {
+          balloonContent: "Финиш пассажира"
+        });
+
+        map.geoObjects.add(passengerStartMarker);
+        map.geoObjects.add(passengerEndMarker);
+
+        passengerRoute = new ymaps.Polyline([
+          [54.7, 21.0],
+          [54.75, 21.05]
+        ], {}, {
+          strokeColor: "#00FF00",
+          strokeWidth: 4,
+          strokeOpacity: 0.7
+        });
+        map.geoObjects.add(passengerRoute);
+      }
+
+      // Отображение информации о поездке
+      const infoBox = document.getElementById("info");
+      if (role === 'driver') {
+        infoBox.innerHTML = `
+          <div><b>Водитель:</b> Иван Иванов (@ivan)<br>
+          Телефон: +7 900 000-00-00<br>
+          Машина: Toyota Corolla, стаж: 5 лет</div>
+        `;
+      } else {
+        infoBox.innerHTML = `
+          <div><b>Пассажир:</b> Алексей Смирнов (@alexey)<br>
+          Телефон: +7 900 111-11-11</div>
+        `;
+      }
+    }
+  </script>
 </body>
 </html>
