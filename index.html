@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Маршрут</title>
+  <title>Народное Такси</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Подключаем Leaflet без integrity -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -34,6 +35,7 @@
     <div id="info"></div>
   </div>
 
+  <!-- Подключаем Leaflet без integrity -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     function getParam(name) {
@@ -67,12 +69,13 @@
       phone: getParam("pp") || "-"
     };
 
-    const map = L.map('map').setView([54.7, 21.0], 10); // Калининградская область
+    const map = L.map('map').setView([54.7, 21.0], 10);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
+    // Добавляем маркеры и линии, если координаты заданы
     if (driverStart) L.marker(driverStart).addTo(map).bindPopup("Старт водителя").openPopup();
     if (driverEnd) L.marker(driverEnd).addTo(map).bindPopup("Финиш водителя");
     if (passengerStart) L.marker(passengerStart).addTo(map).bindPopup("Старт пассажира");
