@@ -3,209 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Маршруты в Калининграде</title>
-    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
+    <title>Выбор маршрута</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_API_КЛЮЧ" type="text/javascript"></script>
     <style>
-        /* Стили остаются без изменений */
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; }
         #map { height: 70vh; width: 100%; }
-        .container { padding: 12px; background-color: white; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-        .button { padding: 12px; background-color: #3399ff; color: white; border: none; border-radius: 8px; margin: 4px; }
-        .button:disabled { background-color: #cccccc; }
-        .info { font-size: 14px; margin: 10px 0; color: #555; }
-        .controls { display: flex; flex-wrap: wrap; }
-        .route-info { background-color: #f0f8ff; padding: 12px; border-radius: 8px; margin-top: 12px; }
+        .panel { padding: 15px; background: #fff; }
+        .button { 
+            padding: 10px 15px; 
+            margin: 5px;
+            background: #4CAF50; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer;
+        }
+        .button:disabled { background: #ccc; }
+        .status { margin: 10px 0; color: #555; }
     </style>
 </head>
 <body>
-
-<div id="map"></div>
-
-<div class="container">
-    <div class="controls">
-        <button id="setStartBtn" class="button">Начало</button>
-        <button id="setEndBtn" class="button">Конец</button>
-        <button id="buildRouteBtn" class="button" disabled>Построить</button>
+    <div id="map"></div>
+    <div class="panel">
+        <button id="startBtn" class="button">Указать начало</button>
+        <button id="endBtn" class="button">Указать конец</button>
+        <button id="sendBtn" class="button" disabled>Отправить в бот</button>
+        <div class="status" id="status">Выберите точки маршрута</div>
     </div>
-    
-    <div class="info" id="infoMessage">Выберите начальную и конечную точки</div>
-    
-    <div class="route-info" id="routeInfo" style="display: none;">
-        <div><strong>Начало:</strong> <span id="startPointInfo">не указано</span></div>
-        <div><strong>Конец:</strong> <span id="endPointInfo">не указано</span></div>
-        <div><strong>Длина:</strong> <span id="routeLength">-</span></div>
-        <div><strong>Время:</strong> <span id="routeTime">-</span></div>
-    </div>
-    
-    <button id="sendToBotBtn" class="button" disabled>Отправить маршрут</button>
-</div>
 
-<script>
-    ymaps.ready(function() {
-        // Центр Калининграда (район Гостиницы Калининград)
-        const CENTER = [54.7135, 20.5113];
-        const BOUNDS = [[54.56, 19.85], [55.15, 21.10]];
-        
-        // Инициализация карты
-        const map = new ymaps.Map('map', {
-            center: CENTER,
-            zoom: 14,
-            controls: ['zoomControl']
-        }, {
-            restrictMapArea: BOUNDS,
-            suppressMapOpenBlock: true
-        });
+    <script>
+        ymaps.ready(init);
 
-        // Включение поведения карты
-        map.behaviors.enable(['drag', 'multiTouch']);
-        
-        // Переменные состояния
-        let startPoint = null, endPoint = null, route = null;
-        const elements = {
-            info: document.getElementById('infoMessage'),
-            routeInfo: document.getElementById('routeInfo'),
-            startInfo: document.getElementById('startPointInfo'),
-            endInfo: document.getElementById('endPointInfo'),
-            length: document.getElementById('routeLength'),
-            time: document.getElementById('routeTime'),
-            buildBtn: document.getElementById('buildRouteBtn'),
-            sendBtn: document.getElementById('sendToBotBtn')
-        };
-
-        // Проверка координат в области
-        const isValidCoord = (coords) => {
-            const [lat, lon] = coords;
-            return lat >= BOUNDS[0][0] && lat <= BOUNDS[1][0] && 
-                   lon >= BOUNDS[0][1] && lon <= BOUNDS[1][1];
-        };
-
-        // Обработчики кнопок
-        document.getElementById('setStartBtn').addEventListener('click', () => {
-            elements.info.textContent = "Выберите начальную точку на карте";
-            window.selectMode = 'start';
-        });
-
-        document.getElementById('setEndBtn').addEventListener('click', () => {
-            elements.info.textContent = "Выберите конечную точку на карте";
-            window.selectMode = 'end';
-        });
-
-        // Обработчик клика по карте
-        map.events.add('click', (e) => {
-            if (!window.selectMode) return;
-            
-            const coords = e.get('coords');
-            if (!isValidCoord(coords)) {
-                elements.info.textContent = "Точка должна быть в пределах области";
-                return;
-            }
-
-            // Удаляем предыдущую точку
-            const oldPoint = window.selectMode === 'start' ? startPoint : endPoint;
-            if (oldPoint) map.geoObjects.remove(oldPoint);
-
-            // Создаем новую точку
-            const point = new ymaps.Placemark(coords, {
-                balloonContent: window.selectMode === 'start' ? "Начало" : "Конец"
-            }, {
-                preset: window.selectMode === 'start' ? 'islands#greenDotIcon' : 'islands#redDotIcon',
-                draggable: true
+        function init() {
+            const map = new ymaps.Map('map', {
+                center: [54.7135, 20.5113],
+                zoom: 14
             });
 
-            map.geoObjects.add(point);
-            
-            // Сохраняем точку
-            if (window.selectMode === 'start') {
-                startPoint = point;
-                elements.startInfo.textContent = coords.map(c => c.toFixed(5)).join(', ');
-            } else {
-                endPoint = point;
-                elements.endInfo.textContent = coords.map(c => c.toFixed(5)).join(', ');
-            }
+            let startPoint, endPoint;
+            let selectedPointType = null;
 
-            // Обработчик перемещения точки
-            point.events.add('dragend', () => {
-                const newCoords = point.geometry.getCoordinates();
-                if (!isValidCoord(newCoords)) {
-                    point.geometry.setCoordinates([
-                        Math.max(BOUNDS[0][0], Math.min(BOUNDS[1][0], newCoords[0])),
-                        Math.max(BOUNDS[0][1], Math.min(BOUNDS[1][1], newCoords[1]))
-                    ]);
-                    return;
-                }
+            // Обработчики кнопок
+            document.getElementById('startBtn').addEventListener('click', () => {
+                selectedPointType = 'start';
+                document.getElementById('status').textContent = "Выберите начало маршрута на карте";
+            });
+
+            document.getElementById('endBtn').addEventListener('click', () => {
+                selectedPointType = 'end';
+                document.getElementById('status').textContent = "Выберите конец маршрута на карте";
+            });
+
+            // Обработчик клика по карте
+            map.events.add('click', (e) => {
+                if (!selectedPointType) return;
                 
-                if (route) buildRoute();
+                const coords = e.get('coords');
+                
+                // Удаляем предыдущую точку
+                if (selectedPointType === 'start' && startPoint) {
+                    map.geoObjects.remove(startPoint);
+                } else if (endPoint) {
+                    map.geoObjects.remove(endPoint);
+                }
+
+                // Создаем новую точку
+                const point = new ymaps.Placemark(coords, {}, {
+                    preset: selectedPointType === 'start' 
+                        ? 'islands#greenDotIcon' 
+                        : 'islands#redDotIcon'
+                });
+
+                map.geoObjects.add(point);
+
+                // Сохраняем точку
+                if (selectedPointType === 'start') {
+                    startPoint = { coords, placemark: point };
+                } else {
+                    endPoint = { coords, placemark: point };
+                }
+
+                selectedPointType = null;
+                updateUI();
             });
 
-            window.selectMode = null;
-            updateUI();
-        });
+            // Отправка данных в бота
+            document.getElementById('sendBtn').addEventListener('click', () => {
+                if (!startPoint || !endPoint) return;
+                
+                const data = {
+                    start: startPoint.coords,
+                    end: endPoint.coords
+                };
 
-        // Построение маршрута
-        document.getElementById('buildRouteBtn').addEventListener('click', buildRoute);
-
-        function buildRoute() {
-            if (!startPoint || !endPoint) return;
-            
-            elements.info.textContent = "Строим маршрут...";
-            elements.buildBtn.disabled = true;
-
-            // Удаляем старый маршрут
-            if (route) map.geoObjects.remove(route);
-
-            ymaps.route([
-                startPoint.geometry.getCoordinates(),
-                endPoint.geometry.getCoordinates()
-            ], {
-                mapStateAutoApply: true,
-                boundedBy: BOUNDS
-            }).then(
-                (newRoute) => {
-                    route = newRoute;
-                    map.geoObjects.add(route);
-                    
-                    // Обновляем информацию
-                    elements.length.textContent = (route.getLength() / 1000).toFixed(1) + ' км';
-                    elements.time.textContent = Math.round(route.getJamsTime() / 60) + ' мин';
-                    elements.routeInfo.style.display = 'block';
-                    elements.sendBtn.disabled = false;
-                    elements.info.textContent = "Маршрут построен";
-                    elements.buildBtn.disabled = false;
-                },
-                (error) => {
-                    console.error("Ошибка маршрута:", error);
-                    elements.info.textContent = "Ошибка построения маршрута. Убедитесь, что точки в пределах Калининграда";
-                    elements.buildBtn.disabled = false;
+                // Отправка через Telegram WebApp
+                if (window.Telegram && Telegram.WebApp) {
+                    Telegram.WebApp.sendData(JSON.stringify(data));
+                } else {
+                    alert("Данные для бота:\n" + JSON.stringify(data));
                 }
-            );
-        }
+            });
 
-        // Обновление интерфейса
-        function updateUI() {
-            if (startPoint && endPoint) {
-                elements.buildBtn.disabled = false;
-                elements.info.textContent = "Готово к построению маршрута";
+            function updateUI() {
+                const sendBtn = document.getElementById('sendBtn');
+                const status = document.getElementById('status');
+                
+                if (startPoint && endPoint) {
+                    sendBtn.disabled = false;
+                    status.textContent = "Готово к отправке в бот";
+                } else {
+                    sendBtn.disabled = true;
+                    status.textContent = startPoint 
+                        ? "Укажите конечную точку" 
+                        : "Укажите начальную точку";
+                }
             }
         }
-
-        // Отправка в бота
-        document.getElementById('sendToBotBtn').addEventListener('click', () => {
-            if (!startPoint || !endPoint) return;
-            
-            const data = {
-                start: startPoint.geometry.getCoordinates(),
-                end: endPoint.geometry.getCoordinates()
-            };
-            
-            if (route) {
-                data.distance = (route.getLength() / 1000).toFixed(1);
-                data.duration = Math.round(route.getJamsTime() / 60);
-            }
-            
-            alert("Данные для бота:\n" + JSON.stringify(data, null, 2));
-        });
-    });
-</script>
+    </script>
 </body>
 </html>
