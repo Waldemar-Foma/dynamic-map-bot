@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Карты</title>
+    <title>Маршруты в Калининграде</title>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
     <style>
         * {
@@ -136,7 +136,10 @@
     </div>
 
     <script>
-        // Центральная точка Калининграда (район Гостиницы Калининград и ТЦ Плаза)
+        // Ожидаем загрузки API Яндекс.Карт
+        ymaps.ready(initMap);
+
+        // Центральная точка Калининграда
         const CENTER_POINT = [54.7135, 20.5113];
         
         // Границы Калининградской области
@@ -145,237 +148,222 @@
             [55.15, 21.10]  // Северо-восток
         ];
 
-        // Проверяем, запущено ли в Telegram WebApp
-        const isTelegramWebApp = () => {
-            return window.Telegram && Telegram.WebApp;
-        };
-
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(initMap, 50);
-        });
-
         function initMap() {
-            // Создаем карту с центром в указанной точке
-            const map = new ymaps.Map('map', {
-                center: CENTER_POINT,
-                zoom: 15,
-                controls: ['zoomControl', 'typeSelector']
-            }, {
-                suppressMapOpenBlock: true,
-                restrictMapArea: KALININGRAD_BOUNDS
-            });
-
-            // Включаем перетаскивание карты
-            map.behaviors.enable('drag');
-            map.behaviors.enable('multiTouch');
-            
-            // Ограничиваем зум
-            map.options.set('maxZoom', 18);
-            map.options.set('minZoom', 10);
-
-            // Переменные для хранения состояния
-            let startPoint = null;
-            let endPoint = null;
-            let route = null;
-            let selectionMode = null;
-
-            // Кэшируем DOM-элементы
-            const elements = {
-                infoMessage: document.getElementById('infoMessage'),
-                routeInfo: document.getElementById('routeInfo'),
-                startPointInfo: document.getElementById('startPointInfo'),
-                endPointInfo: document.getElementById('endPointInfo'),
-                routeLength: document.getElementById('routeLength'),
-                routeTime: document.getElementById('routeTime'),
-                buildRouteBtn: document.getElementById('buildRouteBtn'),
-                sendToBotBtn: document.getElementById('sendToBotBtn'),
-                setStartBtn: document.getElementById('setStartBtn'),
-                setEndBtn: document.getElementById('setEndBtn')
-            };
-
-            // Проверка координат в пределах области
-            const isInKaliningrad = (coords) => {
-                const [lat, lng] = coords;
-                return lat >= KALININGRAD_BOUNDS[0][0] && lat <= KALININGRAD_BOUNDS[1][0] &&
-                       lng >= KALININGRAD_BOUNDS[0][1] && lng <= KALININGRAD_BOUNDS[1][1];
-            };
-
-            // Обработчики кнопок выбора точек
-            elements.setStartBtn.addEventListener('click', () => {
-                selectionMode = 'start';
-                elements.infoMessage.textContent = "Выберите начальную точку на карте";
-                elements.setStartBtn.style.backgroundColor = '#2ecc71';
-                elements.setEndBtn.style.backgroundColor = '#3399ff';
-            });
-
-            elements.setEndBtn.addEventListener('click', () => {
-                selectionMode = 'end';
-                elements.infoMessage.textContent = "Выберите конечную точку на карте";
-                elements.setEndBtn.style.backgroundColor = '#e74c3c';
-                elements.setStartBtn.style.backgroundColor = '#3399ff';
-            });
-
-            // Обработчик клика по карте
-            map.events.add('click', (e) => {
-                if (!selectionMode) return;
-                
-                const coords = e.get('coords');
-                if (!isInKaliningrad(coords)) {
-                    elements.infoMessage.textContent = "Выберите точку в пределах Калининградской области";
-                    return;
-                }
-
-                // Удаляем предыдущую точку
-                if (selectionMode === 'start' && startPoint) {
-                    map.geoObjects.remove(startPoint);
-                } else if (selectionMode === 'end' && endPoint) {
-                    map.geoObjects.remove(endPoint);
-                }
-
-                // Создаем новую точку
-                const placemark = new ymaps.Placemark(coords, {
-                    balloonContent: selectionMode === 'start' ? "Начало маршрута" : "Конец маршрута"
+            try {
+                // Создаем карту с центром в указанной точке
+                const map = new ymaps.Map('map', {
+                    center: CENTER_POINT,
+                    zoom: 14,
+                    controls: ['zoomControl', 'typeSelector']
                 }, {
-                    preset: selectionMode === 'start' ? 'islands#greenDotIcon' : 'islands#redDotIcon',
-                    draggable: true,
-                    iconColor: selectionMode === 'start' ? '#2ecc71' : '#e74c3c',
-                    iconImageSize: [32, 32],
-                    iconLayout: 'default#imageWithContent',
-                    iconImageOffset: [-16, -16]
+                    restrictMapArea: KALININGRAD_BOUNDS,
+                    suppressMapOpenBlock: true
                 });
 
-                map.geoObjects.add(placemark);
+                // Включаем перетаскивание карты
+                map.behaviors.enable('drag');
+                map.behaviors.enable('multiTouch');
+                
+                // Настройки масштабирования
+                map.options.set('maxZoom', 18);
+                map.options.set('minZoom', 10);
 
-                // Сохраняем точку
-                if (selectionMode === 'start') {
-                    startPoint = placemark;
-                    elements.startPointInfo.textContent = formatCoords(coords);
-                } else {
-                    endPoint = placemark;
-                    elements.endPointInfo.textContent = formatCoords(coords);
-                }
+                // Переменные для хранения состояния
+                let startPoint = null;
+                let endPoint = null;
+                let route = null;
+                let selectionMode = null;
 
-                // Обработчик перемещения точки
-                placemark.events.add('dragend', () => {
-                    const newCoords = placemark.geometry.getCoordinates();
-                    if (!isInKaliningrad(newCoords)) {
-                        placemark.geometry.setCoordinates(correctCoords(newCoords));
+                // Кэшируем DOM-элементы
+                const elements = {
+                    infoMessage: document.getElementById('infoMessage'),
+                    routeInfo: document.getElementById('routeInfo'),
+                    startPointInfo: document.getElementById('startPointInfo'),
+                    endPointInfo: document.getElementById('endPointInfo'),
+                    routeLength: document.getElementById('routeLength'),
+                    routeTime: document.getElementById('routeTime'),
+                    buildRouteBtn: document.getElementById('buildRouteBtn'),
+                    sendToBotBtn: document.getElementById('sendToBotBtn'),
+                    setStartBtn: document.getElementById('setStartBtn'),
+                    setEndBtn: document.getElementById('setEndBtn')
+                };
+
+                // Проверка координат в пределах области
+                const isInKaliningrad = (coords) => {
+                    const [lat, lng] = coords;
+                    return lat >= KALININGRAD_BOUNDS[0][0] && lat <= KALININGRAD_BOUNDS[1][0] &&
+                           lng >= KALININGRAD_BOUNDS[0][1] && lng <= KALININGRAD_BOUNDS[1][1];
+                };
+
+                // Обработчики кнопок выбора точек
+                elements.setStartBtn.addEventListener('click', () => {
+                    selectionMode = 'start';
+                    elements.infoMessage.textContent = "Выберите начальную точку на карте";
+                    elements.setStartBtn.style.backgroundColor = '#2ecc71';
+                    elements.setEndBtn.style.backgroundColor = '#3399ff';
+                });
+
+                elements.setEndBtn.addEventListener('click', () => {
+                    selectionMode = 'end';
+                    elements.infoMessage.textContent = "Выберите конечную точку на карте";
+                    elements.setEndBtn.style.backgroundColor = '#e74c3c';
+                    elements.setStartBtn.style.backgroundColor = '#3399ff';
+                });
+
+                // Обработчик клика по карте
+                map.events.add('click', (e) => {
+                    if (!selectionMode) return;
+                    
+                    const coords = e.get('coords');
+                    if (!isInKaliningrad(coords)) {
+                        elements.infoMessage.textContent = "Выберите точку в пределах Калининградской области";
                         return;
                     }
-                    
-                    if (selectionMode === 'start') {
-                        elements.startPointInfo.textContent = formatCoords(newCoords);
-                    } else {
-                        elements.endPointInfo.textContent = formatCoords(newCoords);
+
+                    // Удаляем предыдущую точку
+                    if (selectionMode === 'start' && startPoint) {
+                        map.geoObjects.remove(startPoint);
+                    } else if (selectionMode === 'end' && endPoint) {
+                        map.geoObjects.remove(endPoint);
                     }
-                    
-                    if (route) buildRoute();
+
+                    // Создаем новую точку
+                    const placemark = new ymaps.Placemark(coords, {
+                        balloonContent: selectionMode === 'start' ? "Начало маршрута" : "Конец маршрута"
+                    }, {
+                        preset: selectionMode === 'start' ? 'islands#greenDotIcon' : 'islands#redDotIcon',
+                        draggable: true,
+                        iconColor: selectionMode === 'start' ? '#2ecc71' : '#e74c3c'
+                    });
+
+                    map.geoObjects.add(placemark);
+
+                    // Сохраняем точку
+                    if (selectionMode === 'start') {
+                        startPoint = placemark;
+                        elements.startPointInfo.textContent = formatCoords(coords);
+                    } else {
+                        endPoint = placemark;
+                        elements.endPointInfo.textContent = formatCoords(coords);
+                    }
+
+                    // Обработчик перемещения точки
+                    placemark.events.add('dragend', () => {
+                        const newCoords = placemark.geometry.getCoordinates();
+                        if (!isInKaliningrad(newCoords)) {
+                            placemark.geometry.setCoordinates(correctCoords(newCoords));
+                            return;
+                        }
+                        
+                        if (selectionMode === 'start') {
+                            elements.startPointInfo.textContent = formatCoords(newCoords);
+                        } else {
+                            elements.endPointInfo.textContent = formatCoords(newCoords);
+                        }
+                        
+                        if (route) buildRoute();
+                    });
+
+                    selectionMode = null;
+                    elements.setStartBtn.style.backgroundColor = '#3399ff';
+                    elements.setEndBtn.style.backgroundColor = '#3399ff';
+                    updateUI();
                 });
 
-                selectionMode = null;
-                elements.setStartBtn.style.backgroundColor = '#3399ff';
-                elements.setEndBtn.style.backgroundColor = '#3399ff';
-                updateUI();
-            });
+                // Построение маршрута
+                elements.buildRouteBtn.addEventListener('click', buildRoute);
 
-            // Построение маршрута
-            elements.buildRouteBtn.addEventListener('click', buildRoute);
-
-            function buildRoute() {
-                if (!startPoint || !endPoint) return;
-                
-                elements.infoMessage.textContent = "Строим маршрут...";
-                elements.buildRouteBtn.disabled = true;
-
-                // Удаляем предыдущий маршрут
-                if (route) {
-                    map.geoObjects.remove(route);
-                }
-
-                const startCoords = startPoint.geometry.getCoordinates();
-                const endCoords = endPoint.geometry.getCoordinates();
-
-                ymaps.route([startCoords, endCoords], {
-                    mapStateAutoApply: true,
-                    boundedBy: KALININGRAD_BOUNDS,
-                    avoidTrafficJams: true,
-                    routingMode: 'auto'
-                }).then(
-                    (r) => {
-                        route = r;
-                        map.geoObjects.add(route);
-                        
-                        // Обновляем информацию
-                        elements.routeLength.textContent = `${(route.getLength() / 1000).toFixed(1)} км`;
-                        elements.routeTime.textContent = `${Math.round(route.getJamsTime() / 60)} мин`;
-                        
-                        updateUI();
-                        elements.infoMessage.textContent = "Маршрут построен";
-                        elements.buildRouteBtn.disabled = false;
-                    },
-                    (error) => {
-                        console.error("Route error:", error);
-                        elements.infoMessage.textContent = "Не удалось построить маршрут. Попробуйте другие точки";
-                        elements.buildRouteBtn.disabled = false;
-                    }
-                );
-            }
-
-            // Отправка данных в бот
-            elements.sendToBotBtn.addEventListener('click', () => {
-                if (!startPoint || !endPoint) return;
-                
-                const routeData = {
-                    start: startPoint.geometry.getCoordinates(),
-                    end: endPoint.geometry.getCoordinates()
-                };
-                
-                if (route) {
-                    routeData.distance = (route.getLength() / 1000).toFixed(1);
-                    routeData.duration = Math.round(route.getJamsTime() / 60);
-                }
-                
-                if (isTelegramWebApp()) {
-                    Telegram.WebApp.sendData(JSON.stringify(routeData));
-                } else {
-                    alert(`Данные маршрута:\n${JSON.stringify(routeData, null, 2)}`);
-                }
-            });
-
-            // Вспомогательные функции
-            function correctCoords(coords) {
-                const [lat, lng] = coords;
-                return [
-                    Math.max(KALININGRAD_BOUNDS[0][0], Math.min(KALININGRAD_BOUNDS[1][0], lat)),
-                    Math.max(KALININGRAD_BOUNDS[0][1], Math.min(KALININGRAD_BOUNDS[1][1], lng))
-                ];
-            }
-
-            function formatCoords(coords) {
-                return `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
-            }
-
-            function updateUI() {
-                if (startPoint && endPoint) {
-                    elements.buildRouteBtn.disabled = false;
-                    elements.routeInfo.style.display = 'grid';
-                    elements.sendToBotBtn.disabled = false;
-                    elements.infoMessage.textContent = "Нажмите 'Построить' для создания маршрута";
-                } else {
+                function buildRoute() {
+                    if (!startPoint || !endPoint) return;
+                    
+                    elements.infoMessage.textContent = "Строим маршрут...";
                     elements.buildRouteBtn.disabled = true;
-                    elements.sendToBotBtn.disabled = true;
-                }
-            }
 
-            // Адаптация под Telegram WebApp
-            if (isTelegramWebApp()) {
-                Telegram.WebApp.expand();
-                document.body.style.backgroundColor = Telegram.WebApp.backgroundColor;
-                
-                // Оптимизация для мобильных устройств
-                if (window.innerWidth < 500) {
-                    document.getElementById('map').style.height = '65vh';
+                    // Удаляем предыдущий маршрут
+                    if (route) {
+                        map.geoObjects.remove(route);
+                    }
+
+                    const startCoords = startPoint.geometry.getCoordinates();
+                    const endCoords = endPoint.geometry.getCoordinates();
+
+                    ymaps.route([startCoords, endCoords], {
+                        mapStateAutoApply: true,
+                        boundedBy: KALININGRAD_BOUNDS,
+                        avoidTrafficJams: true,
+                        routingMode: 'auto'
+                    }).then(
+                        (r) => {
+                            route = r;
+                            map.geoObjects.add(route);
+                            
+                            // Обновляем информацию
+                            elements.routeLength.textContent = `${(route.getLength() / 1000).toFixed(1)} км`;
+                            elements.routeTime.textContent = `${Math.round(route.getJamsTime() / 60)} мин`;
+                            
+                            updateUI();
+                            elements.infoMessage.textContent = "Маршрут построен";
+                            elements.buildRouteBtn.disabled = false;
+                        },
+                        (error) => {
+                            console.error("Route error:", error);
+                            elements.infoMessage.textContent = "Не удалось построить маршрут. Попробуйте другие точки";
+                            elements.buildRouteBtn.disabled = false;
+                        }
+                    );
                 }
+
+                // Отправка данных в бот
+                elements.sendToBotBtn.addEventListener('click', () => {
+                    if (!startPoint || !endPoint) return;
+                    
+                    const routeData = {
+                        start: startPoint.geometry.getCoordinates(),
+                        end: endPoint.geometry.getCoordinates()
+                    };
+                    
+                    if (route) {
+                        routeData.distance = (route.getLength() / 1000).toFixed(1);
+                        routeData.duration = Math.round(route.getJamsTime() / 60);
+                    }
+                    
+                    // Для демонстрации просто показываем данные
+                    alert(`Данные маршрута:\n${JSON.stringify(routeData, null, 2)}`);
+                    
+                    // В реальном приложении используйте:
+                    // if (window.Telegram && Telegram.WebApp) {
+                    //     Telegram.WebApp.sendData(JSON.stringify(routeData));
+                    // }
+                });
+
+                // Вспомогательные функции
+                function correctCoords(coords) {
+                    const [lat, lng] = coords;
+                    return [
+                        Math.max(KALININGRAD_BOUNDS[0][0], Math.min(KALININGRAD_BOUNDS[1][0], lat)),
+                        Math.max(KALININGRAD_BOUNDS[0][1], Math.min(KALININGRAD_BOUNDS[1][1], lng))
+                    ];
+                }
+
+                function formatCoords(coords) {
+                    return `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`;
+                }
+
+                function updateUI() {
+                    if (startPoint && endPoint) {
+                        elements.buildRouteBtn.disabled = false;
+                        elements.routeInfo.style.display = 'grid';
+                        elements.sendToBotBtn.disabled = false;
+                        elements.infoMessage.textContent = "Нажмите 'Построить' для создания маршрута";
+                    } else {
+                        elements.buildRouteBtn.disabled = true;
+                        elements.sendToBotBtn.disabled = true;
+                    }
+                }
+
+            } catch (error) {
+                console.error("Map initialization error:", error);
+                document.getElementById('infoMessage').textContent = "Ошибка загрузки карты. Пожалуйста, обновите страницу.";
             }
         }
     </script>
