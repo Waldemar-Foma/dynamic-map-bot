@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Выбор точек маршрута</title>
+    <title>Выбор точек в Калининграде</title>
     <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
@@ -27,24 +27,42 @@
         <button id="startBtn" class="button">Точка А</button>
         <button id="endBtn" class="button">Точка Б</button>
         <button id="sendBtn" class="button" disabled>Отправить</button>
-        <div class="status" id="status">Выберите обе точки</div>
+        <div class="status" id="status">Выберите обе точки в Калининградской области</div>
     </div>
 
     <script>
         ymaps.ready(init);
 
         function init() {
+            // Границы Калининградской области
+            const kaliningradBounds = [
+                [54.56, 19.85], // Юго-запад
+                [55.15, 21.10]  // Северо-восток
+            ];
+
             // Центр Калининграда
             const map = new ymaps.Map('map', {
                 center: [54.7135, 20.5113],
-                zoom: 14
+                zoom: 12,
+                restrictMapArea: kaliningradBounds
             });
+
+            // Ограничиваем зону карты
+            map.setBounds(kaliningradBounds, { checkZoomRange: true });
+            map.behaviors.disable('scrollZoom');
 
             let points = {
                 start: null,
                 end: null
             };
             let currentMode = null;
+
+            // Проверка координат в области
+            function isInKaliningrad(coords) {
+                const [lat, lon] = coords;
+                return lat >= kaliningradBounds[0][0] && lat <= kaliningradBounds[1][0] &&
+                       lon >= kaliningradBounds[0][1] && lon <= kaliningradBounds[1][1];
+            }
 
             // Кнопки выбора точек
             document.getElementById('startBtn').addEventListener('click', () => {
@@ -63,6 +81,11 @@
                 
                 const coords = e.get('coords');
                 
+                if (!isInKaliningrad(coords)) {
+                    updateStatus('Выберите точку в пределах Калининградской области');
+                    return;
+                }
+
                 // Удаляем предыдущую точку
                 if (points[currentMode]) {
                     map.geoObjects.remove(points[currentMode].marker);
@@ -72,7 +95,19 @@
                 const marker = new ymaps.Placemark(coords, {}, {
                     preset: currentMode === 'start' 
                         ? 'islands#blueIcon' 
-                        : 'islands#redIcon'
+                        : 'islands#redIcon',
+                    draggable: true
+                });
+
+                // Обработка перемещения маркера
+                marker.events.add('dragend', function(e) {
+                    const newCoords = e.get('target').geometry.getCoordinates();
+                    if (!isInKaliningrad(newCoords)) {
+                        e.get('target').geometry.setCoordinates(points[currentMode].coords);
+                        updateStatus('Точка должна быть в пределах области');
+                    } else {
+                        points[currentMode].coords = newCoords;
+                    }
                 });
 
                 map.geoObjects.add(marker);
@@ -96,12 +131,9 @@
                     end: points.end.coords
                 };
 
-                // Для WebApp Telegram
                 if (window.Telegram && Telegram.WebApp) {
                     Telegram.WebApp.sendData(JSON.stringify(data));
                     Telegram.WebApp.close();
-                } else {
-                    alert(`Данные для бота:\n${JSON.stringify(data)}`);
                 }
             });
 
