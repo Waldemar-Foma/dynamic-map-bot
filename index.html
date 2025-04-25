@@ -3,155 +3,275 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Карты</title>
-    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+    <title>Выбор точек в Калининграде</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=20981a8c-b8ac-4af3-a0ff-7d13b7dfd0ae" type="text/javascript"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        #map { width: 100%; height: 70vh; }
-        .panel { padding: 10px; background: #fff; text-align: center; }
-        .button { 
-            padding: 10px 15px; 
-            margin: 5px; 
-            background: #3399ff; 
-            color: white; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer;
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-        .status { margin: 10px 0; color: #555; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            touch-action: manipulation;
+        }
+        #map {
+            width: 100%;
+            height: 70vh;
+        }
+        .container {
+            padding: 12px;
+            background-color: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            padding: 12px 15px;
+            margin: 5px;
+            background-color: #3399ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            flex: 1;
+            min-width: 0;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .info {
+            font-size: 14px;
+            margin: 10px 0;
+            color: #555;
+            line-height: 1.4;
+        }
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .route-info {
+            background-color: #f0f8ff;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 14px;
+            display: none;
+        }
+        .button-large {
+            padding: 14px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <div class="panel">
-        <button id="startBtn" class="button">Точка А</button>
-        <button id="endBtn" class="button">Точка Б</button>
-        <button id="sendBtn" class="button" disabled>Отправить</button>
-        <div class="status" id="status">Выберите обе точки в Калининградской области</div>
+    <div class="container">
+        <div class="controls">
+            <button id="setStartBtn" class="button">Начало</button>
+            <button id="setEndBtn" class="button">Конец</button>
+        </div>
+        
+        <div class="info" id="infoMessage">Выберите начальную и конечную точки в Калининградской области</div>
+        
+        <div class="route-info" id="routeInfo">
+            <div><strong>Начало:</strong> <span id="startPointInfo">не указано</span></div>
+            <div><strong>Конец:</strong> <span id="endPointInfo">не указано</span></div>
+        </div>
+        
+        <button id="sendToBotBtn" class="button button-large" disabled>Отправить точки в бот</button>
     </div>
 
     <script>
-        ymaps.ready(init);
-
-        function init() {
+        ymaps.ready(function() {
             // Границы Калининградской области
-            const kaliningradBounds = [
+            const KALININGRAD_BOUNDS = [
                 [54.56, 19.85], // Юго-запад
                 [55.15, 21.10]  // Северо-восток
             ];
-
-            // Центр Калининграда
+            
+            // Центр Калининграда (район Гостиницы Калининград)
+            const CENTER_POINT = [54.7135, 20.5113];
+            
+            // Создаем карту с жесткими ограничениями
             const map = new ymaps.Map('map', {
-                center: [54.7135, 20.5113],
+                center: CENTER_POINT,
                 zoom: 12,
-                restrictMapArea: kaliningradBounds
+                controls: ['zoomControl']
+            }, {
+                restrictMapArea: KALININGRAD_BOUNDS,
+                suppressMapOpenBlock: true,
+                maxZoom: 18,
+                minZoom: 10
+            });
+            
+            // Блокируем выход за границы
+            map.behaviors.enable('drag');
+            map.behaviors.enable('multiTouch');
+            map.behaviors.disable('scrollZoom');
+            
+            // Перехватываем события изменения видимой области
+            map.events.add('boundschange', function(e) {
+                const newBounds = e.get('newBounds');
+                const sw = newBounds[0];
+                const ne = newBounds[1];
+                
+                // Если пользователь пытается выйти за границы - возвращаем
+                if (sw[0] < KALININGRAD_BOUNDS[0][0] || 
+                    sw[1] < KALININGRAD_BOUNDS[0][1] || 
+                    ne[0] > KALININGRAD_BOUNDS[1][0] || 
+                    ne[1] > KALININGRAD_BOUNDS[1][1]) {
+                    map.setBounds(KALININGRAD_BOUNDS, {checkZoomRange: true});
+                }
             });
 
-            // Ограничиваем зону карты
-            map.setBounds(kaliningradBounds, { checkZoomRange: true });
-            map.behaviors.disable('scrollZoom');
-
-            let points = {
-                start: null,
-                end: null
+            // Переменные состояния
+            let startPoint = null;
+            let endPoint = null;
+            let selectionMode = null;
+            
+            // Элементы интерфейса
+            const elements = {
+                info: document.getElementById('infoMessage'),
+                routeInfo: document.getElementById('routeInfo'),
+                startInfo: document.getElementById('startPointInfo'),
+                endInfo: document.getElementById('endPointInfo'),
+                sendBtn: document.getElementById('sendToBotBtn'),
+                setStartBtn: document.getElementById('setStartBtn'),
+                setEndBtn: document.getElementById('setEndBtn')
             };
-            let currentMode = null;
 
             // Проверка координат в области
             function isInKaliningrad(coords) {
                 const [lat, lon] = coords;
-                return lat >= kaliningradBounds[0][0] && lat <= kaliningradBounds[1][0] &&
-                       lon >= kaliningradBounds[0][1] && lon <= kaliningradBounds[1][1];
+                return lat >= KALININGRAD_BOUNDS[0][0] && 
+                       lat <= KALININGRAD_BOUNDS[1][0] && 
+                       lon >= KALININGRAD_BOUNDS[0][1] && 
+                       lon <= KALININGRAD_BOUNDS[1][1];
             }
 
-            // Кнопки выбора точек
-            document.getElementById('startBtn').addEventListener('click', () => {
-                currentMode = 'start';
-                updateStatus('Выберите точку А на карте');
+            // Корректировка координат при выходе за границы
+            function correctCoords(coords) {
+                const [lat, lon] = coords;
+                return [
+                    Math.max(KALININGRAD_BOUNDS[0][0], Math.min(KALININGRAD_BOUNDS[1][0], lat)),
+                    Math.max(KALININGRAD_BOUNDS[0][1], Math.min(KALININGRAD_BOUNDS[1][1], lon))
+                ];
+            }
+
+            // Обработчики кнопок выбора точек
+            elements.setStartBtn.addEventListener('click', function() {
+                selectionMode = 'start';
+                elements.info.textContent = "Выберите начальную точку на карте";
+                elements.setStartBtn.style.backgroundColor = '#2ecc71';
+                elements.setEndBtn.style.backgroundColor = '#3399ff';
             });
 
-            document.getElementById('endBtn').addEventListener('click', () => {
-                currentMode = 'end';
-                updateStatus('Выберите точку Б на карте');
+            elements.setEndBtn.addEventListener('click', function() {
+                selectionMode = 'end';
+                elements.info.textContent = "Выберите конечную точку на карте";
+                elements.setEndBtn.style.backgroundColor = '#e74c3c';
+                elements.setStartBtn.style.backgroundColor = '#3399ff';
             });
 
-            // Клик по карте
-            map.events.add('click', (e) => {
-                if (!currentMode) return;
+            // Обработчик клика по карте
+            map.events.add('click', function(e) {
+                if (!selectionMode) return;
                 
                 const coords = e.get('coords');
                 
+                // Проверяем, что точка в пределах области
                 if (!isInKaliningrad(coords)) {
-                    updateStatus('Выберите точку в пределах Калининградской области');
+                    elements.info.textContent = "Точка должна быть в пределах Калининградской области";
                     return;
                 }
 
                 // Удаляем предыдущую точку
-                if (points[currentMode]) {
-                    map.geoObjects.remove(points[currentMode].marker);
+                if (selectionMode === 'start' && startPoint) {
+                    map.geoObjects.remove(startPoint);
+                } else if (selectionMode === 'end' && endPoint) {
+                    map.geoObjects.remove(endPoint);
                 }
 
-                // Создаем маркер
-                const marker = new ymaps.Placemark(coords, {}, {
-                    preset: currentMode === 'start' 
-                        ? 'islands#blueIcon' 
-                        : 'islands#redIcon',
-                    draggable: true
+                // Создаем новую точку с улучшенными иконками
+                const placemark = new ymaps.Placemark(coords, {
+                    balloonContent: selectionMode === 'start' ? "Начальная точка" : "Конечная точка"
+                }, {
+                    preset: selectionMode === 'start' ? 'islands#greenDotIcon' : 'islands#redDotIcon',
+                    iconColor: selectionMode === 'start' ? '#2ecc71' : '#e74c3c',
+                    draggable: true,
+                    iconImageSize: [32, 32],
+                    iconLayout: 'default#imageWithContent',
+                    iconImageOffset: [-16, -16]
                 });
 
-                // Обработка перемещения маркера
-                marker.events.add('dragend', function(e) {
-                    const newCoords = e.get('target').geometry.getCoordinates();
+                map.geoObjects.add(placemark);
+
+                // Сохраняем точку
+                if (selectionMode === 'start') {
+                    startPoint = placemark;
+                    elements.startInfo.textContent = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+                } else {
+                    endPoint = placemark;
+                    elements.endInfo.textContent = coords[0].toFixed(6) + ', ' + coords[1].toFixed(6);
+                }
+
+                // Обработчик перемещения точки
+                placemark.events.add('dragend', function() {
+                    const newCoords = placemark.geometry.getCoordinates();
                     if (!isInKaliningrad(newCoords)) {
-                        e.get('target').geometry.setCoordinates(points[currentMode].coords);
-                        updateStatus('Точка должна быть в пределах области');
+                        placemark.geometry.setCoordinates(correctCoords(newCoords));
+                        elements.info.textContent = "Точка должна быть в пределах области";
+                        return;
+                    }
+                    
+                    if (selectionMode === 'start') {
+                        elements.startInfo.textContent = newCoords[0].toFixed(6) + ', ' + newCoords[1].toFixed(6);
                     } else {
-                        points[currentMode].coords = newCoords;
+                        elements.endInfo.textContent = newCoords[0].toFixed(6) + ', ' + newCoords[1].toFixed(6);
                     }
                 });
 
-                map.geoObjects.add(marker);
-                
-                // Сохраняем данные
-                points[currentMode] = {
-                    coords: coords,
-                    marker: marker
-                };
-
-                currentMode = null;
-                checkPoints();
+                selectionMode = null;
+                elements.setStartBtn.style.backgroundColor = '#3399ff';
+                elements.setEndBtn.style.backgroundColor = '#3399ff';
+                updateUI();
             });
 
-            // Отправка в бота
-            document.getElementById('sendBtn').addEventListener('click', () => {
-                if (!points.start || !points.end) return;
+            // Отправка данных в бота
+            elements.sendBtn.addEventListener('click', function() {
+                if (!startPoint || !endPoint) return;
                 
                 const data = {
-                    start: points.start.coords,
-                    end: points.end.coords
+                    start: startPoint.geometry.getCoordinates(),
+                    end: endPoint.geometry.getCoordinates()
                 };
-
+                
+                // Для WebApp Telegram
                 if (window.Telegram && Telegram.WebApp) {
                     Telegram.WebApp.sendData(JSON.stringify(data));
                     Telegram.WebApp.close();
+                } else {
+                    alert("Данные для бота:\n" + JSON.stringify(data, null, 2));
                 }
             });
 
-            function checkPoints() {
-                const sendBtn = document.getElementById('sendBtn');
-                sendBtn.disabled = !(points.start && points.end);
-                
-                if (points.start && points.end) {
-                    updateStatus('Готово к отправке');
+            // Обновление интерфейса
+            function updateUI() {
+                if (startPoint && endPoint) {
+                    elements.sendBtn.disabled = false;
+                    elements.routeInfo.style.display = 'block';
+                    elements.info.textContent = "Точки выбраны. Можно отправлять в бот";
                 } else {
-                    updateStatus(points.start ? 'Выберите точку Б' : 'Выберите точку А');
+                    elements.sendBtn.disabled = true;
+                    elements.routeInfo.style.display = 'none';
                 }
             }
-
-            function updateStatus(text) {
-                document.getElementById('status').textContent = text;
-            }
-        }
+        });
     </script>
 </body>
 </html>
