@@ -87,20 +87,44 @@
 
     <script>
         ymaps.ready(function() {
-            // Границы Калининградской области
+            // Жесткие границы Калининградской области
             var kaliningradBounds = [
                 [54.56, 19.85], // Юго-западная точка
                 [55.15, 21.10]  // Северо-восточная точка
             ];
             
+            // Центр Калининграда
+            var kaliningradCenter = [54.7104, 20.4522];
+            
             var map = new ymaps.Map('map', {
-                center: [54.7104, 20.4522], // Центр Калининграда
+                center: kaliningradCenter,
                 zoom: 12,
-                controls: ['zoomControl']
+                controls: ['zoomControl', 'typeSelector']
             });
             
-            // Ограничиваем область карты Калининградской областью
-            map.setBounds(kaliningradBounds, { checkZoomRange: true });
+            // Жестко ограничиваем область карты Калининградской областью
+            map.setBounds(kaliningradBounds, {
+                checkZoomRange: true,
+                zoomMargin: 0,
+                preciseZoom: true
+            });
+            
+            // Блокируем выход за границы области
+            map.options.set('restrictMapArea', [
+                [54.56, 19.85], // Юго-западная точка
+                [55.15, 21.10]  // Северо-восточная точка
+            ]);
+            
+            // Отключаем возможность перетаскивания карты за границы
+            map.behaviors.disable('drag');
+            
+            // Включаем перетаскивание только после проверки, что не выходим за границы
+            map.events.add('actiontick', function(e) {
+                var currentBounds = map.getBounds();
+                if (!isBoundsInKaliningrad(currentBounds)) {
+                    map.panTo(kaliningradCenter, { flying: true });
+                }
+            });
             
             // Переменные для хранения точек и маршрута
             var startPoint = null;
@@ -173,6 +197,13 @@
                 // Обработчик перемещения точки
                 placemark.events.add('dragend', function() {
                     var newCoords = placemark.geometry.getCoordinates();
+                    if (!isInKaliningrad(newCoords)) {
+                        // Возвращаем точку в границы области
+                        var correctedCoords = correctCoordsToKaliningrad(newCoords);
+                        placemark.geometry.setCoordinates(correctedCoords);
+                        newCoords = correctedCoords;
+                    }
+                    
                     if (selectionMode === 'start') {
                         startPointInfo.textContent = newCoords[0].toFixed(4) + ', ' + newCoords[1].toFixed(4);
                     } else {
@@ -213,7 +244,8 @@
                     startCoords,
                     endCoords
                 ], {
-                    mapStateAutoApply: true
+                    mapStateAutoApply: true,
+                    boundedBy: kaliningradBounds // Ограничиваем маршрут областью
                 }).then(function(r) {
                     route = r;
                     map.geoObjects.add(route);
@@ -275,16 +307,12 @@
                        lng >= kaliningradBounds[0][1] && lng <= kaliningradBounds[1][1];
             }
             
-            // Обработчик изменения области просмотра карты
-            map.events.add('boundschange', function(e) {
-                var newBounds = e.get('newBounds');
-                var allowedBounds = map.options.get('restrictMapArea');
-                
-                // Если пользователь пытается выйти за границы, возвращаем карту назад
-                if (!isBoundsInKaliningrad(newBounds)) {
-                    map.setBounds(kaliningradBounds, { checkZoomRange: true });
-                }
-            });
+            // Корректировка координат, если они вышли за границы
+            function correctCoordsToKaliningrad(coords) {
+                var lat = Math.max(kaliningradBounds[0][0], Math.min(kaliningradBounds[1][0], coords[0]));
+                var lng = Math.max(kaliningradBounds[0][1], Math.min(kaliningradBounds[1][1], coords[1]));
+                return [lat, lng];
+            }
             
             // Проверка, что вся область просмотра в пределах Калининграда
             function isBoundsInKaliningrad(bounds) {
