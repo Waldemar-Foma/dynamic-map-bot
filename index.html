@@ -3,121 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Выбор маршрута</title>
-    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_API_КЛЮЧ" type="text/javascript"></script>
+    <title>Выбор точек маршрута</title>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; }
-        #map { height: 70vh; width: 100%; }
-        .panel { padding: 15px; background: #fff; }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 70vh; }
+        .panel { padding: 10px; background: #fff; text-align: center; }
         .button { 
             padding: 10px 15px; 
-            margin: 5px;
-            background: #4CAF50; 
+            margin: 5px; 
+            background: #3399ff; 
             color: white; 
             border: none; 
             border-radius: 5px; 
             cursor: pointer;
         }
-        .button:disabled { background: #ccc; }
         .status { margin: 10px 0; color: #555; }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div class="panel">
-        <button id="startBtn" class="button">Указать начало</button>
-        <button id="endBtn" class="button">Указать конец</button>
-        <button id="sendBtn" class="button" disabled>Отправить в бот</button>
-        <div class="status" id="status">Выберите точки маршрута</div>
+        <button id="startBtn" class="button">Точка А</button>
+        <button id="endBtn" class="button">Точка Б</button>
+        <button id="sendBtn" class="button" disabled>Отправить</button>
+        <div class="status" id="status">Выберите обе точки</div>
     </div>
 
     <script>
         ymaps.ready(init);
 
         function init() {
+            // Центр Калининграда
             const map = new ymaps.Map('map', {
                 center: [54.7135, 20.5113],
                 zoom: 14
             });
 
-            let startPoint, endPoint;
-            let selectedPointType = null;
+            let points = {
+                start: null,
+                end: null
+            };
+            let currentMode = null;
 
-            // Обработчики кнопок
+            // Кнопки выбора точек
             document.getElementById('startBtn').addEventListener('click', () => {
-                selectedPointType = 'start';
-                document.getElementById('status').textContent = "Выберите начало маршрута на карте";
+                currentMode = 'start';
+                updateStatus('Выберите точку А на карте');
             });
 
             document.getElementById('endBtn').addEventListener('click', () => {
-                selectedPointType = 'end';
-                document.getElementById('status').textContent = "Выберите конец маршрута на карте";
+                currentMode = 'end';
+                updateStatus('Выберите точку Б на карте');
             });
 
-            // Обработчик клика по карте
+            // Клик по карте
             map.events.add('click', (e) => {
-                if (!selectedPointType) return;
+                if (!currentMode) return;
                 
                 const coords = e.get('coords');
                 
                 // Удаляем предыдущую точку
-                if (selectedPointType === 'start' && startPoint) {
-                    map.geoObjects.remove(startPoint);
-                } else if (endPoint) {
-                    map.geoObjects.remove(endPoint);
+                if (points[currentMode]) {
+                    map.geoObjects.remove(points[currentMode].marker);
                 }
 
-                // Создаем новую точку
-                const point = new ymaps.Placemark(coords, {}, {
-                    preset: selectedPointType === 'start' 
-                        ? 'islands#greenDotIcon' 
-                        : 'islands#redDotIcon'
+                // Создаем маркер
+                const marker = new ymaps.Placemark(coords, {}, {
+                    preset: currentMode === 'start' 
+                        ? 'islands#blueIcon' 
+                        : 'islands#redIcon'
                 });
 
-                map.geoObjects.add(point);
-
-                // Сохраняем точку
-                if (selectedPointType === 'start') {
-                    startPoint = { coords, placemark: point };
-                } else {
-                    endPoint = { coords, placemark: point };
-                }
-
-                selectedPointType = null;
-                updateUI();
-            });
-
-            // Отправка данных в бота
-            document.getElementById('sendBtn').addEventListener('click', () => {
-                if (!startPoint || !endPoint) return;
+                map.geoObjects.add(marker);
                 
-                const data = {
-                    start: startPoint.coords,
-                    end: endPoint.coords
+                // Сохраняем данные
+                points[currentMode] = {
+                    coords: coords,
+                    marker: marker
                 };
 
-                // Отправка через Telegram WebApp
+                currentMode = null;
+                checkPoints();
+            });
+
+            // Отправка в бота
+            document.getElementById('sendBtn').addEventListener('click', () => {
+                if (!points.start || !points.end) return;
+                
+                const data = {
+                    start: points.start.coords,
+                    end: points.end.coords
+                };
+
+                // Для WebApp Telegram
                 if (window.Telegram && Telegram.WebApp) {
                     Telegram.WebApp.sendData(JSON.stringify(data));
+                    Telegram.WebApp.close();
                 } else {
-                    alert("Данные для бота:\n" + JSON.stringify(data));
+                    alert(`Данные для бота:\n${JSON.stringify(data)}`);
                 }
             });
 
-            function updateUI() {
+            function checkPoints() {
                 const sendBtn = document.getElementById('sendBtn');
-                const status = document.getElementById('status');
+                sendBtn.disabled = !(points.start && points.end);
                 
-                if (startPoint && endPoint) {
-                    sendBtn.disabled = false;
-                    status.textContent = "Готово к отправке в бот";
+                if (points.start && points.end) {
+                    updateStatus('Готово к отправке');
                 } else {
-                    sendBtn.disabled = true;
-                    status.textContent = startPoint 
-                        ? "Укажите конечную точку" 
-                        : "Укажите начальную точку";
+                    updateStatus(points.start ? 'Выберите точку Б' : 'Выберите точку А');
                 }
+            }
+
+            function updateStatus(text) {
+                document.getElementById('status').textContent = text;
             }
         }
     </script>
